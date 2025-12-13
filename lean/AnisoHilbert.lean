@@ -3,4 +3,5 @@ import AnisoHilbert.Step
 import AnisoHilbert.Lemma41
 import AnisoHilbert.Loops
 import AnisoHilbert.ActiveAxesLemmas
+import AnisoHilbert.EmbedLemmas
 import AnisoHilbert.LevelIndexed
