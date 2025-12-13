@@ -1,5 +1,6 @@
 import AnisoHilbert.Loops
 import AnisoHilbert.Lemma41
+import AnisoHilbert.PlaneAccumulatorLemmas
 
 namespace AnisoHilbert
 
