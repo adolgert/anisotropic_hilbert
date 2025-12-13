@@ -1,4 +1,5 @@
 import AnisoHilbert.Representation
+import AnisoHilbert.Step
 
 open AnisoHilbert
 
@@ -43,3 +44,33 @@ def bvToList {k : Nat} (v : BV k) : List Bool :=
 #eval bvToList (packPlane (activeAxes mExample 2) pExample 1)
 
 end AnisoHilbert.Demo
+
+namespace AnisoHilbert.DemoStep
+
+open AnisoHilbert
+
+/-- A square 2D example: both axes have precision 3 (so A = [0,1] at every level). -/
+def m33 : Exponents 2
+| ⟨0, _⟩ => 3
+| ⟨1, _⟩ => 3
+
+def A33 : List (Axis 2) := activeAxes m33 1
+
+/-- Point p = [5,6] (binary 101 and 110) from Hamilton's worked example figure. -/
+def p56 : PointBV m33
+| ⟨0, _⟩ => BV.ofNat (k := 3) 5
+| ⟨1, _⟩ => BV.ofNat (k := 3) 6
+
+/-- Initial HilbertIndex state corresponds to (e,d) = (0,0) in Algorithm 2. -/
+def st0 : State 2 A33 :=
+  State.mk' (A := A33) (e := BV.zero) (dPos := ⟨0, by decide⟩)
+
+/-- One step at bit-plane i=2 (the MSB for m=3). -/
+def step2 := hilbertStep (A := A33) st0 p56 2
+
+-- Print the extracted digit `w` (as a Nat) and the updated local direction index and entry mask.
+#eval BV.toNat step2.1
+#eval step2.2.dPos.val
+#eval BV.toNat step2.2.e
+
+end AnisoHilbert.DemoStep
