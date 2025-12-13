@@ -69,8 +69,12 @@ def st0 : State 2 A33 :=
 def step2 := hilbertStep (A := A33) st0 p56 2
 
 -- Print the extracted digit `w` (as a Nat) and the updated local direction index and entry mask.
-#eval BV.toNat step2.1
-#eval step2.2.dPos.val
-#eval BV.toNat step2.2.e
+#eval BV.toNat step2.w
+#eval step2.stNext.dPos.val
+#eval BV.toNat step2.stNext.e
+
+-- Optionally also inspect the packed plane `l` and transformed word `lT`.
+#eval BV.toNat step2.l
+#eval BV.toNat step2.lT
 
 end AnisoHilbert.DemoStep

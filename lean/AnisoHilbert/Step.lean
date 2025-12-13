@@ -45,13 +45,20 @@ def gc {k : Nat} (x : BV k) : BV k :=
 This is the boolean form of Hamilton's Gray inverse relation
 `bit(i,j) = Σ_{k=j}^{m-1} bit(gc(i),k) mod 2` (Theorem 2.2). fileciteturn0file0L1-L7 -/
 def suffixXor {k : Nat} (g : BV k) (start : Nat) : Bool :=
-  let len := k - start
-  let rec go : Nat → Bool → Bool
-    | 0, acc => acc
-    | Nat.succ t, acc =>
-        let idx := start + t
-        go t (bxor acc (getBit g idx))
-  go len false
+  if h : start < k then
+    bxor (getBit g start) (suffixXor g (start + 1))
+  else
+    false
+termination_by k - start
+decreasing_by
+  -- if `start < k` then `k - (start+1) < k - start`
+  have hpos : 0 < k - start := Nat.sub_pos_of_lt h
+  have hlt : (k - start) - 1 < (k - start) :=
+    Nat.sub_lt_self (Nat.succ_pos 0) hpos
+  -- rewrite `k - (start + 1)` as `(k - start) - 1`
+  have hrew : k - (start + 1) = (k - start) - 1 := by
+    simpa [Nat.succ_eq_add_one] using (Nat.sub_succ k start)
+  simpa [hrew] using hlt
 
 /-- Inverse of the binary reflected Gray code on `BV k`.
 Returns the (binary) bitvector whose Gray encoding is `g`. (Theorem 2.2). fileciteturn0file0L1-L7 -/
@@ -127,11 +134,39 @@ theorem length_pos {n : Nat} {A : List (Axis n)} (st : State n A) : 0 < A.length
   have hlt : st.dPos.val < A.length := st.dPos.isLt
   have hne : A.length ≠ 0 := by
     intro h0
+    -- If `A.length = 0` then `hlt` becomes `st.dPos.val < 0`, contradiction.
     simp only [h0] at hlt
     exact Nat.not_lt_zero _ hlt
   exact Nat.pos_of_ne_zero hne
 
 end State
+
+/-- Output of a single HilbertIndex iteration (Algorithm 2, lines 3–7).
+
+This record keeps the *observable* intermediate words separate from the
+state update:
+
+* `l`   : the packed bit-plane word (what we "saw" in `p` at plane `i`)
+* `lT`  : the transformed word `T(e,d)(l)`
+* `w`   : the child index at this level, `gc⁻¹(lT)`
+* `stNext` : the updated orientation state after descending into child `w`
+
+Keeping `l`/`lT` around is useful in later lemmas, e.g. to relate plane
+extraction to Gray-code adjacency independently of the state transition.
+-/
+structure StepOut (n : Nat) (A : List (Axis n)) where
+  l : BV A.length
+  lT : BV A.length
+  w : BV A.length
+  stNext : State n A
+
+namespace StepOut
+
+/-- Convenience: interpret the `w` field as a natural number. -/
+def wNat {n : Nat} {A : List (Axis n)} (s : StepOut n A) : Nat :=
+  BV.toNat s.w
+
+end StepOut
 
 /-- One iteration of Hamilton's HilbertIndex update (Algorithm 2, lines 3–7),
 generalized to a chosen ordered active-axis list `A`.
@@ -148,15 +183,18 @@ Output:
 -/
 def hilbertStep {n : Nat} {m : Exponents n}
     (A : List (Axis n)) (st : State n A) (p : PointBV m) (i : Nat)
-    : (BV A.length) × (State n A) :=
+    : StepOut n A :=
   let l : BV A.length := packPlane A p i
   let lT : BV A.length := T st.e st.dPos.val l
-  let wBV : BV A.length := BV.gcInv lT
-  let wNat : Nat := BV.toNat wBV
+  let w : BV A.length := BV.gcInv lT
+  let wNat : Nat := BV.toNat w
   let e' : BV A.length :=
     BV.xor st.e (BV.rotL (st.dPos.val.succ) (childEntry A.length wNat))
   let dVal : Nat := (st.dPos.val + childDir A.length wNat + 1) % A.length
   let dPos' : Fin A.length := ⟨dVal, Nat.mod_lt _ (State.length_pos st)⟩
-  (wBV, State.mk' (A := A) e' dPos')
+  { l := l
+  , lT := lT
+  , w := w
+  , stNext := State.mk' (A := A) e' dPos' }
 
 end AnisoHilbert
