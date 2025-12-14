@@ -318,10 +318,16 @@ theorem suffixXor_gc {k : Nat} (x : BV k) (start : Nat) : suffixXor (gc x) start
 
         -- Unfold only the *outer* layer of `suffixXor` at `start`.
         have hsuf : suffixXor (gc x) start = bxor (getBit (gc x) start) (suffixXor (gc x) (start + 1)) := by
-          -- `suffixXor` is defined by a *dependent* `if` (`if h : start < k then ...`).
-          -- After unfolding, use `dif_pos hlt` to reduce only the outer if.
-          unfold suffixXor
-          simp only [dif_pos hlt]
+          -- IMPORTANT: unfold on the LHS only.
+          --
+          -- If we `unfold suffixXor` globally, Lean will also expand the *RHS*
+          -- occurrence `suffixXor (gc x) (start+1)` and we end up with a mismatched
+          -- goal involving `decide (start+1 < k) && ...`.
+          --
+          -- `conv_lhs` keeps the recursive call on the RHS in folded form.
+          conv_lhs =>
+            unfold suffixXor
+            simp [hlt]
 
         -- The measure decreases by 1 at the recursive call.
         have hks' : k - (start + 1) = t := by
@@ -361,9 +367,10 @@ theorem gc_gcInv {k : Nat} (g : BV k) : gc (gcInv g) = g := by
 
   -- One-step unfolding for `suffixXor` at an in-range index.
   have hsuf : suffixXor g i.val = bxor (getBit g i.val) (suffixXor g (i.val + 1)) := by
-    -- Same remark as above: `suffixXor` uses a dependent `if`.
-    unfold suffixXor
-    simp [hi]
+    -- Same remark as above: unfold only on the LHS.
+    conv_lhs =>
+      unfold suffixXor
+      simp [hi]
 
   -- `getBit (gcInv g) (i+1) = suffixXor g (i+1)` (even when out-of-range).
   have hgb : getBit (gcInv g) (i.val + 1) = suffixXor g (i.val + 1) := by

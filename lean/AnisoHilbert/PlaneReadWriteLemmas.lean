@@ -67,9 +67,13 @@ theorem packPlane_writePlane_same
   have hij : i < m j := by
     -- rewrite `j` into the hypothesis `hi`
     simpa [j] using (hi t)
-  -- Expand `packPlane` → `getBit` and expand `writePlane` using `hpos`.
-  -- Then `getBit (setBit _ i (l t)) i = l t` by `getBit_setBit_same`.
-  simp [packPlane, writePlane, j, hpos, getBit, setBit, hij]
+  -- First compute how `writePlane` acts on this active axis.
+  have hw : writePlane A l p i j = setBit (p j) i (l t) := by
+    simp [writePlane, hpos]
+  -- Now `packPlane` reads back exactly the bit we just wrote.
+  -- Using `getBit_setBit_same` avoids any definitional-equality issues around `Fin` proofs.
+  simpa [packPlane, j, hw] using
+    (getBit_setBit_same (x := p j) (i := i) (b := l t) hij)
 
 /--
 Specialization to `A = activeAxes m (i+1)`.

@@ -24,7 +24,7 @@ identities let us transport that adjacency through the orientation machinery.
 theorem xor_cancel_both {k : Nat} (x y e : BV k) : xor (xor x e) (xor y e) = xor x y := by
   funext i
   -- Truth-table proof (keeps this lemma independent of extra XOR-algebra imports).
-  cases hx : x i <;> cases hy : y i <;> cases he : e i <;> rfl
+  cases hx : x i <;> cases hy : y i <;> cases he : e i <;> simp [BV.xor, BV.bxor, hx, hy, he]
 
 /-- `rotR` commutes with `xor`: it just permutes indices. -/
 theorem xor_rotR {k : Nat} (r : Nat) (x y : BV k) :
