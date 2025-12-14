@@ -319,9 +319,9 @@ theorem suffixXor_gc {k : Nat} (x : BV k) (start : Nat) : suffixXor (gc x) start
         -- Unfold only the *outer* layer of `suffixXor` at `start`.
         have hsuf : suffixXor (gc x) start = bxor (getBit (gc x) start) (suffixXor (gc x) (start + 1)) := by
           -- `suffixXor` is defined by a *dependent* `if` (`if h : start < k then ...`).
-          -- After unfolding, `simp [hlt]` reduces the `dif_pos` branch.
+          -- After unfolding, use `dif_pos hlt` to reduce only the outer if.
           unfold suffixXor
-          simp [hlt]
+          simp only [dif_pos hlt]
 
         -- The measure decreases by 1 at the recursive call.
         have hks' : k - (start + 1) = t := by

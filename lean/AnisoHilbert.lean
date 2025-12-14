@@ -6,3 +6,8 @@ import AnisoHilbert.ActiveAxesLemmas
 import AnisoHilbert.EmbedLemmas
 import AnisoHilbert.PlaneAccumulatorLemmas
 import AnisoHilbert.LevelIndexed
+import AnisoHilbert.AdjacencyLemmas
+import AnisoHilbert.MutualInverses
+import AnisoHilbert.PlaneReadWriteLemmas
+import AnisoHilbert.DecodeHigherPlaneLemmas
+import AnisoHilbert.EncodeAfterDecode
