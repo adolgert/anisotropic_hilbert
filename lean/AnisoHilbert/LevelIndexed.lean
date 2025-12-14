@@ -56,37 +56,203 @@ theorem hilbertStep_stateUpdate
   simp [hilbertStep, stateUpdate]
 
 /--
+The "seam" lemma connecting a single-level `writePlane` with the accumulator invariant.
+
+After decoding plane `s'` and writing it into an accumulator `pAcc`, the recursive
+result is stated in terms of `overwriteBelow` at threshold `s'`.  This lemma rewrites
+that to threshold `s'+1`, so it can be compared directly to the outer goal.
+
+This is exactly the `hSeam` step in `discrete_proof.md`.
+-/
+theorem overwriteBelow_seam
+    {n : Nat} {m : Exponents n} (pAcc p : PointBV m) (s' : Nat) :
+    let A := activeAxes m (Nat.succ s')
+    let p1 := writePlane A (packPlane A p s') pAcc s'
+    overwriteBelow p1 p s' = overwriteBelow pAcc p (Nat.succ s') := by
+  intro A p1
+  -- Unfold `overwriteBelow` and discharge using the plane-accumulator lemma.
+  -- (This lemma is proven in `PlaneAccumulatorLemmas.lean` without importing this file.)
+  simpa [overwriteBelow, p1, A] using
+    Plane.overwriteBelow_writePlane_packPlane_activeAxes (m := m) (pAcc := pAcc) (p := p) (i := s')
+
+/--
 Level-indexed inversion statement (Theorem 4.4 “by induction on levels”, but with
 an explicit accumulator via `overwriteBelow`).
 
 This is the next target lemma; proof will be by induction on `s`.
 -/
 theorem decodeFromLevel_encodeFromLevel
-    {n : Nat} {m : Exponents n} (pAcc p : PointBV m) :
-    ∀ s : Nat, ∀ st : State n (activeAxes m s), ∀ ds : Digits,
+    {n : Nat} {m : Exponents n} (p : PointBV m) :
+    ∀ s : Nat, ∀ pAcc : PointBV m, ∀ st : State n (activeAxes m s), ∀ ds : Digits,
       encodeFromLevel (m := m) p s st = some ds →
       decodeFromLevel (m := m) s st ds pAcc = some (overwriteBelow pAcc p s) := by
   intro s
   induction s with
   | zero =>
-      intro st ds hEnc
-      -- `encodeFromLevel p 0 _ = some []` and `decodeFromLevel 0 _ [] pAcc = some pAcc`.
-      -- Also `overwriteBelow pAcc p 0 = pAcc` (nothing is below level 0).
-      simp only [encodeFromLevel] at hEnc
+      intro pAcc st ds hEnc
+      -- `encodeFromLevel p 0 _ = some []`.
+      simp [encodeFromLevel] at hEnc
       cases hEnc
-      simp only [decodeFromLevel]
-      congr 1
-  | succ s ih =>
-      intro st ds hEnc
-      -- Next steps for this branch:
-      -- 1. unfold `encodeFromLevel` at `Nat.succ s` to expose the head digit `w` and recursive digits
-      -- 2. unfold `decodeFromLevel` similarly
-      -- 3. use `decodePlane_of_hilbertStep` to identify the reconstructed plane
-      -- 4. relate `writePlane` + `packPlane` to `overwriteBelow` (needs list/pos lemmas)
-      -- 5. show activation embedding succeeds for `activeAxes m (s+1) ⊆ activeAxes m s`
-      -- 6. apply the induction hypothesis `ih`.
-      sorry
+      -- `decodeFromLevel 0 _ [] pAcc = some pAcc` and `overwriteBelow _ _ 0 = pAcc`.
+      simp [decodeFromLevel]
+      funext j
+      funext t
+      simp [overwriteBelow]
+  | succ s0 ih =>
+      intro pAcc st ds hEnc
+      -- Split on whether `s0 = 0` (one level left) or `s0 = succ s` (true recursion).
+      cases s0 with
+      | zero =>
+          -- ### Case: `s = 1` (no recursive call / no activation embedding)
+          --
+          -- Ordering (no embedding):
+          --   encode: packPlane → T → gcInv  (digit)
+          --   decode: gc → Tinv → writePlane
+          --
+          -- After rewriting the reconstructed plane via `decodePlane_of_hilbertStep`,
+          -- use `overwriteBelow_seam` at `s' = 0` to show that writing plane 0 is
+          -- exactly `overwriteBelow _ _ 1`.
+          simp [encodeFromLevel] at hEnc
+          -- After the simp, `ds` is definitionally `[digit]`.
+          cases hEnc
+          -- Now unfold the decoder on that singleton digit list.
+          --
+          -- At this point the goal is of the form
+          --   `some p1 = some (overwriteBelow pAcc p 1)`
+          -- where `p1` is the level-0 write computed by the decoder.
+          --
+          -- The key rewrite is that the decoder's reconstructed plane `l` equals
+          -- `packPlane (activeAxes m 1) p 0`.
+          have hPlane :
+              Tinv st.e st.dPos.val (BV.gc (hilbertStep (A := activeAxes m 1) st p 0).w)
+                = packPlane (activeAxes m 1) p 0 := by
+            -- `decodePlane_of_hilbertStep` gives `… = step.l`, and `step.l` is defeq to `packPlane …`.
+            simpa [hilbertStep] using
+              (decodePlane_of_hilbertStep (A := activeAxes m 1) st p 0)
+          -- Use the seam lemma specialized to `s' = 0`.
+          have hSeam :
+              let A := activeAxes m 1
+              let p1 := writePlane A (packPlane A p 0) pAcc 0
+              p1 = overwriteBelow pAcc p 1 := by
+            intro A p1
+            -- `overwriteBelow p1 p 0 = p1`.
+            have := overwriteBelow_seam (m := m) (pAcc := pAcc) (p := p) (s' := 0)
+            simpa [overwriteBelow, p1, A] using this
+          -- Extract the let-bound seam statement as a plain equation.
+          have hSeam' :
+              writePlane (activeAxes m 1) (packPlane (activeAxes m 1) p 0) pAcc 0
+                = overwriteBelow pAcc p 1 := by
+            simpa using hSeam
+          -- Unfold the decoder for a singleton digit list and simplify.
+          -- `hPlane` rewrites the reconstructed plane, and `hSeam'` closes the accumulator goal.
+          simp [decodeFromLevel, hPlane, hSeam', overwriteBelow]
+      | succ s =>
+          -- ### Case: `s = succ (succ s)` (recursive call + activation embedding)
+          --
+          -- This branch is where the seam bookkeeping matters.
+          -- We structure the proof to make the ordering explicit:
+          --
+          --  (1) `encodeFromLevel` produces:
+          --      * the head digit `digit := ⟨A.length, step.w⟩`
+          --      * an embedding witness `hEmbed : embedState? step.stNext = some st'`
+          --      * the recursive encoding equality `hRec : encodeFromLevel p (succ s) st' = some rest`
+          --
+          --  (2) `decodeFromLevel` consumes the head digit and computes:
+          --      * `l := Tinv … (gc step.w)` and `p1 := writePlane A l pAcc i`
+          --      * `stNext := stateUpdate … step.w`
+          --
+          --  (3) **Before IH**:
+          --      use `decodePlane_of_hilbertStep` to rewrite `l` into `packPlane …`,
+          --      and use `hilbertStep_stateUpdate` + `hEmbed` to force the decoder
+          --      into the same `some st'` branch.
+          --
+          --  (4) **Apply IH** to the recursive call, with accumulator `p1`.
+          --
+          --  (5) **After IH**:
+          --      apply `overwriteBelow_seam` (your `hSeam`) to rewrite
+          --      `overwriteBelow p1 p i` into `overwriteBelow pAcc p (i+1)`.
+          --
+          -- Name the active axes at this level and the one-step encoding output.
+          let A : List (Axis n) := activeAxes m (Nat.succ (Nat.succ s))
+          let step : StepOut n A := hilbertStep (A := A) st p (Nat.succ s)
+          let digit : Digit := ⟨A.length, step.w⟩
 
+          -- Unfold the encoder to obtain:
+          --   hEmb : embedState? step.stNext = some st'
+          --   hRec : encodeFromLevel p (succ s) st' = some rest
+          --   ds = digit :: rest
+          --
+          -- Use `split` on the nested matches (more robust than rewriting them with `simp`).
+          simp [encodeFromLevel, A, step, digit] at hEnc
+          split at hEnc
+          · -- embedState? = none: impossible under `= some ds`
+            cases hEnc
+          · rename_i st' hEmb
+            split at hEnc
+            · -- recursive encode returned `none`: impossible under `= some ds`
+              cases hEnc
+            · rename_i rest hRec
+              -- Now hEnc : some (digit :: rest) = some ds
+              injection hEnc with hDs
+              subst hDs
+
+              -- Decoder-side: rewrite the reconstructed plane before the IH.
+              have hPlane :
+                  Tinv st.e st.dPos.val (BV.gc step.w) = packPlane A p (Nat.succ s) := by
+                -- `decodePlane_of_hilbertStep` gives `… = (hilbertStep …).l`.
+                -- With `step := hilbertStep …`, `step.l` is defeq to `packPlane …`.
+                simpa [step, hilbertStep] using
+                  (decodePlane_of_hilbertStep (A := A) st p (Nat.succ s))
+
+              -- Decoder-side: align the embedding branch by rewriting the state update.
+              have hState : step.stNext = stateUpdate (A := A) st step.w := by
+                simpa [step] using (hilbertStep_stateUpdate (A := A) st p (Nat.succ s))
+              have hEmb' :
+                  Embed.embedState? (Aold := A) (Anew := activeAxes m (Nat.succ s))
+                    (stateUpdate (A := A) st step.w) = some st' := by
+                simpa [hState] using hEmb
+
+              -- Define the accumulator point after writing this plane *as it should be*.
+              -- This is the `p1` that will be fed into the recursive IH.
+              let p1 : PointBV m := writePlane A (packPlane A p (Nat.succ s)) pAcc (Nat.succ s)
+
+              -- Apply the IH to the recursive call with accumulator `p1`.
+              have ihRes :
+                  decodeFromLevel (m := m) (Nat.succ s) st' rest p1 =
+                    some (overwriteBelow p1 p (Nat.succ s)) :=
+                ih (pAcc := p1) (st := st') (ds := rest) hRec
+
+              -- This is the `hSeam` rewrite: it happens **after** `ihRes`.
+              have hSeam : overwriteBelow p1 p (Nat.succ s) = overwriteBelow pAcc p (Nat.succ (Nat.succ s)) := by
+                -- `overwriteBelow_seam` is stated with `let`-bindings.
+                -- `simpa` instantiates them with our `A` and `p1`.
+                simpa [A, p1] using
+                  (overwriteBelow_seam (m := m) (pAcc := pAcc) (p := p) (s' := Nat.succ s))
+
+              -- Final assembly:
+              --   decode (one step) → recursive decode
+              --   rewrite by IH (`ihRes`)
+              --   rewrite by seam (`hSeam`)
+              --
+              -- Unfold/simplify the decoder one step; then rewrite by IH and the seam lemma.
+              -- First, identify the decoder's accumulator with our `p1`.
+              have hp1' :
+                  writePlane A (Tinv st.e st.dPos.val (BV.gc step.w)) pAcc (Nat.succ s) = p1 := by
+                simp [p1, hPlane]
+
+              -- Evaluate the outer decoder one step and use `hEmb'` to select the recursive branch.
+              have hOuter :
+                  decodeFromLevel (m := m) (Nat.succ (Nat.succ s)) st (digit :: rest) pAcc =
+                    decodeFromLevel (m := m) (Nat.succ s) st' rest p1 := by
+                simp [decodeFromLevel, A, digit, hEmb', hp1']
+
+              -- Now use IH then seam.
+              calc
+                decodeFromLevel (m := m) (Nat.succ (Nat.succ s)) st (digit :: rest) pAcc =
+                    decodeFromLevel (m := m) (Nat.succ s) st' rest p1 := hOuter
+                _ = some (overwriteBelow p1 p (Nat.succ s)) := ihRes
+                _ = some (overwriteBelow pAcc p (Nat.succ (Nat.succ s))) := by
+                    simpa [hSeam]
 end Level
 
 end AnisoHilbert
