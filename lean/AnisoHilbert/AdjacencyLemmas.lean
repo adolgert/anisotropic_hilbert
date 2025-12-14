@@ -23,10 +23,8 @@ identities let us transport that adjacency through the orientation machinery.
 /-- Cancelling the same mask on both sides does not change the XOR-difference. -/
 theorem xor_cancel_both {k : Nat} (x y e : BV k) : xor (xor x e) (xor y e) = xor x y := by
   funext i
-  -- Reduce to a Boolean identity at a single bit position.
-  -- We avoid rewriting with named hypotheses and simply case-split on the three Booleans.
-  cases x i <;> cases y i <;> cases e i <;>
-    simp only [xor, bxor] <;> decide
+  -- Truth-table proof (keeps this lemma independent of extra XOR-algebra imports).
+  cases hx : x i <;> cases hy : y i <;> cases he : e i <;> simp [xor, bxor, hx, hy, he]
 
 /-- `rotR` commutes with `xor`: it just permutes indices. -/
 theorem xor_rotR {k : Nat} (r : Nat) (x y : BV k) :

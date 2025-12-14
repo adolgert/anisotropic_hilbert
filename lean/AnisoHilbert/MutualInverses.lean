@@ -43,8 +43,9 @@ lemma foldl_max_ge_of_mem {α : Type} (f : α → Nat) :
   | nil => cases hmem
   | cons x xs ih =>
       -- membership split
-      rcases List.mem_cons.mp hmem with rfl | hmem'
-      · -- a = x
+      rcases List.mem_cons.mp hmem with hax | hmem'
+      · -- case `a = x`
+        subst a
         -- f x ≤ max init (f x) ≤ foldl … (max init (f x)) xs
         have h₁ : f x ≤ Nat.max init (f x) := Nat.le_max_right _ _
         have h₂ : Nat.max init (f x) ≤ xs.foldl (fun acc y => Nat.max acc (f y)) (Nat.max init (f x)) :=
@@ -52,7 +53,7 @@ lemma foldl_max_ge_of_mem {α : Type} (f : α → Nat) :
         simpa [List.foldl] using Nat.le_trans h₁ h₂
       · -- a ∈ xs
         -- foldl on cons reduces to tail foldl with updated init
-        simpa [List.foldl] using ih (init := Nat.max init (f x)) (a := a) hmem'
+        simpa [List.foldl] using ih (init := Nat.max init (f x)) hmem'
 
 /-- Each axis precision is bounded above by `mMax m`. -/
 theorem le_mMax {n : Nat} (m : Exponents n) (j : Axis n) : m j ≤ mMax m := by
@@ -102,32 +103,32 @@ theorem decodeDigits?_encodeDigits?
       subst hds
       -- Decode and rewrite by `hp0`.
       simp [decodeDigits?, hS, hp0]
-  | succ s0 =>
+  | succ sPred =>
       -- Unfold `encodeDigits?` to obtain the initial state and the level-encoding equality.
       have hEnc' :
-          match initState? (n := n) (activeAxes m (Nat.succ s0)) with
+          match initState? (n := n) (activeAxes m (Nat.succ sPred)) with
           | none => none
-          | some st0 => encodeFromLevel (m := m) p (Nat.succ s0) st0
+          | some st0 => encodeFromLevel (m := m) p (Nat.succ sPred) st0
           = some ds := by
         simpa [encodeDigits?, hS] using h
       -- Case split on `initState?`.
-      cases hInit : initState? (n := n) (activeAxes m (Nat.succ s0)) with
+      cases hInit : initState? (n := n) (activeAxes m (Nat.succ sPred)) with
       | none =>
           -- Contradiction: encoder cannot be `none` if it equals `some ds`.
           simp [hInit] at hEnc'
       | some st0 =>
           -- Extract the per-level encoding equation.
-          have hEncLevel : encodeFromLevel (m := m) p (Nat.succ s0) st0 = some ds := by
+          have hEncLevel : encodeFromLevel (m := m) p (Nat.succ sPred) st0 = some ds := by
             simpa [hInit] using hEnc'
           -- Apply the level-indexed lemma with accumulator `pointZero`.
           have hDecLevel :
-              decodeFromLevel (m := m) (Nat.succ s0) st0 ds (pointZero (m := m)) =
-                some (overwriteBelow (pointZero (m := m)) p (Nat.succ s0)) :=
+              decodeFromLevel (m := m) (Nat.succ sPred) st0 ds (pointZero (m := m)) =
+                some (overwriteBelow (pointZero (m := m)) p (Nat.succ sPred)) :=
             Level.decodeFromLevel_encodeFromLevel (m := m) (p := p)
-              (s := Nat.succ s0) (pAcc := pointZero (m := m)) (st := st0) (ds := ds) hEncLevel
+              (s := Nat.succ sPred) (pAcc := pointZero (m := m)) (st := st0) (ds := ds) hEncLevel
           -- `overwriteBelow pointZero p (mMax m) = p` because `m j ≤ mMax m` for all axes.
-          have hOw : overwriteBelow (pointZero (m := m)) p (Nat.succ s0) = p := by
-            exact overwriteBelow_eq_src_of_ge (dst := pointZero (m := m)) (p := p) (s := Nat.succ s0)
+          have hOw : overwriteBelow (pointZero (m := m)) p (Nat.succ sPred) = p := by
+            exact overwriteBelow_eq_src_of_ge (dst := pointZero (m := m)) (p := p) (s := Nat.succ sPred)
               (hs := fun j => by
                 -- `Nat.succ s0 = mMax m` by `hS`.
                 have : m j ≤ mMax m := le_mMax (m := m) j
