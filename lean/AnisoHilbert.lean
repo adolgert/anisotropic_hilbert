@@ -11,3 +11,5 @@ import AnisoHilbert.MutualInverses
 import AnisoHilbert.PlaneReadWriteLemmas
 import AnisoHilbert.DecodeHigherPlaneLemmas
 import AnisoHilbert.EncodeAfterDecode
+import AnisoHilbert.EncodeTotal
+import AnisoHilbert.MutualInversesTotal

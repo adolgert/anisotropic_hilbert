@@ -20,6 +20,10 @@ Reference: "Compact Hilbert Indices" (Technical Report CS-2006-07). filecite�
 abbrev Axis (n : Nat) := Fin n
 abbrev Exponents (n : Nat) := Axis n → Nat
 
+/-- Nondegenerate exponent data: every axis has at least one bit (exclude `m j = 0`). -/
+def ExponentsPos {n : Nat} (m : Exponents n) : Prop :=
+  ∀ j : Axis n, 0 < m j
+
 /-- A bitvector of length `k`, represented as a total function `Fin k → Bool`.
 
 We use this instead of committing immediately to `Std.BitVec` APIs.

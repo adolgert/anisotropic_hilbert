@@ -31,7 +31,7 @@ lemma le_foldl_max {α : Type} (f : α → Nat) :
       -- foldl g init (x::xs) = foldl g (max init (f x)) xs
       have h₁ : init ≤ Nat.max init (f x) := Nat.le_max_left _ _
       have h₂ : Nat.max init (f x) ≤ xs.foldl (fun acc y => Nat.max acc (f y)) (Nat.max init (f x)) :=
-        ih (Nat.max init (f x))
+        ih (init := Nat.max init (f x))
       simpa [List.foldl] using Nat.le_trans h₁ h₂
 
 /-- If `a ∈ xs`, then `f a` is bounded by the `foldl max` value over `xs`. -/
@@ -43,17 +43,16 @@ lemma foldl_max_ge_of_mem {α : Type} (f : α → Nat) :
   | nil => cases hmem
   | cons x xs ih =>
       -- membership split
-      rcases List.mem_cons.mp hmem with hax | hmem'
-      · subst hax
-        -- a = x
+      rcases List.mem_cons.mp hmem with rfl | hmem'
+      · -- a = x
         -- f x ≤ max init (f x) ≤ foldl … (max init (f x)) xs
         have h₁ : f x ≤ Nat.max init (f x) := Nat.le_max_right _ _
         have h₂ : Nat.max init (f x) ≤ xs.foldl (fun acc y => Nat.max acc (f y)) (Nat.max init (f x)) :=
-          le_foldl_max (f := f) (Nat.max init (f x)) xs
+          le_foldl_max (f := f) (init := Nat.max init (f x)) xs
         simpa [List.foldl] using Nat.le_trans h₁ h₂
       · -- a ∈ xs
         -- foldl on cons reduces to tail foldl with updated init
-        simpa [List.foldl] using ih (Nat.max init (f x)) a hmem'
+        simpa [List.foldl] using ih (init := Nat.max init (f x)) (a := a) hmem'
 
 /-- Each axis precision is bounded above by `mMax m`. -/
 theorem le_mMax {n : Nat} (m : Exponents n) (j : Axis n) : m j ≤ mMax m := by
@@ -62,7 +61,7 @@ theorem le_mMax {n : Nat} (m : Exponents n) (j : Axis n) : m j ≤ mMax m := by
     simpa [allAxes] using (List.mem_finRange j)
   -- unfold `mMax` and apply the fold bound
   unfold mMax
-  exact foldl_max_ge_of_mem (f := fun a : Axis n => m a) 0 (allAxes n) j hmem
+  simpa using (foldl_max_ge_of_mem (f := fun a : Axis n => m a) (init := 0) (xs := allAxes n) (a := j) hmem)
 
 /-- If `mMax m = 0` then every `PointBV m` is the origin `pointZero`. -/
 theorem point_eq_pointZero_of_mMax_zero {n : Nat} {m : Exponents n}
@@ -106,18 +105,16 @@ theorem decodeDigits?_encodeDigits?
   | succ s0 =>
       -- Unfold `encodeDigits?` to obtain the initial state and the level-encoding equality.
       have hEnc' :
-          (match initState? (n := n) (activeAxes m (Nat.succ s0)) with
+          match initState? (n := n) (activeAxes m (Nat.succ s0)) with
           | none => none
-          | some st0 => encodeFromLevel (m := m) p (Nat.succ s0) st0)
+          | some st0 => encodeFromLevel (m := m) p (Nat.succ s0) st0
           = some ds := by
         simpa [encodeDigits?, hS] using h
       -- Case split on `initState?`.
       cases hInit : initState? (n := n) (activeAxes m (Nat.succ s0)) with
       | none =>
           -- Contradiction: encoder cannot be `none` if it equals `some ds`.
-          have : (none : Option Digits) = some ds := by
-            simpa [hInit] using hEnc'
-          cases this
+          simp [hInit] at hEnc'
       | some st0 =>
           -- Extract the per-level encoding equation.
           have hEncLevel : encodeFromLevel (m := m) p (Nat.succ s0) st0 = some ds := by
@@ -135,27 +132,8 @@ theorem decodeDigits?_encodeDigits?
                 -- `Nat.succ s0 = mMax m` by `hS`.
                 have : m j ≤ mMax m := le_mMax (m := m) j
                 simpa [hS] using this)
-          -- Turn the level-indexed decode result into `some p`.
-          have hDecFrom :
-              decodeFromLevel (m := m) (Nat.succ s0) st0 ds (pointZero (m := m)) = some p := by
-            simpa [hOw] using hDecLevel
-          -- Unfold the top-level decoder and reduce using `hInit`.
-          have hDecDigits :
-              decodeDigits? (m := m) ds =
-                (match initState? (n := n) (activeAxes m (Nat.succ s0)) with
-                | none => none
-                | some st0 => decodeFromLevel (m := m) (Nat.succ s0) st0 ds (pointZero (m := m))) := by
-            simp [decodeDigits?, hS]
-          -- Now rewrite by `hInit` and finish with `hDecFrom`.
-          calc
-            decodeDigits? (m := m) ds
-                = (match initState? (n := n) (activeAxes m (Nat.succ s0)) with
-                  | none => none
-                  | some st0 => decodeFromLevel (m := m) (Nat.succ s0) st0 ds (pointZero (m := m))) := by
-                  simpa using hDecDigits
-            _ = decodeFromLevel (m := m) (Nat.succ s0) st0 ds (pointZero (m := m)) := by
-                  simp [hInit]
-            _ = some p := hDecFrom
+          -- Finish by unfolding the top-level decoder and rewriting.
+          simpa [decodeDigits?, hS, hInit, hOw] using hDecLevel
 
 end Mutual
 
