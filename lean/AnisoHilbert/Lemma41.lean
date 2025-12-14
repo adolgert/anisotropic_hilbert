@@ -319,11 +319,9 @@ theorem suffixXor_gc {k : Nat} (x : BV k) (start : Nat) : suffixXor (gc x) start
         -- Unfold only the *outer* layer of `suffixXor` at `start`.
         have hsuf : suffixXor (gc x) start = bxor (getBit (gc x) start) (suffixXor (gc x) (start + 1)) := by
           -- `suffixXor` is defined by a *dependent* `if` (`if h : start < k then ...`).
-          -- After unfolding, `simp [hlt]` reduces the `dif_pos` branch.
-          unfold suffixXor
-          -- Reduce only the *outer* `if`; do not unfold the recursive call.
-          rw [dif_pos hlt]
-          rfl
+          -- Use `conv_lhs` to unfold only the LHS, keeping the RHS `suffixXor` intact.
+          conv_lhs => unfold suffixXor
+          simp only [dif_pos hlt]
 
         -- The measure decreases by 1 at the recursive call.
         have hks' : k - (start + 1) = t := by
@@ -364,10 +362,9 @@ theorem gc_gcInv {k : Nat} (g : BV k) : gc (gcInv g) = g := by
   -- One-step unfolding for `suffixXor` at an in-range index.
   have hsuf : suffixXor g i.val = bxor (getBit g i.val) (suffixXor g (i.val + 1)) := by
     -- Same remark as above: `suffixXor` uses a dependent `if`.
-    unfold suffixXor
-    -- Reduce only the *outer* `if`; do not unfold the recursive call.
-    rw [dif_pos hi]
-    rfl
+    -- Use `conv_lhs` to unfold only the LHS, keeping the RHS `suffixXor` intact.
+    conv_lhs => unfold suffixXor
+    simp only [dif_pos hi]
 
   -- `getBit (gcInv g) (i+1) = suffixXor g (i+1)` (even when out-of-range).
   have hgb : getBit (gcInv g) (i.val + 1) = suffixXor g (i.val + 1) := by
