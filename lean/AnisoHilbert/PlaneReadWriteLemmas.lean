@@ -67,20 +67,21 @@ theorem packPlane_writePlane_same
   have hij : i < m j := by
     -- rewrite `j` into the hypothesis `hi`
     simpa [j] using (hi t)
-  -- Expand `packPlane` → `getBit` and expand `writePlane` using `hpos`.
-  -- Then `getBit (setBit _ i (l t)) i = l t` by `getBit_setBit_same`.
-  --
-  -- We keep this proof explicit (rather than a single `simp`) because `simp`
-  -- can fail to reduce through the `match` on `pos?` in some Lean versions.
-  simp [packPlane, j]
-  simp [writePlane, hpos, getBit, hij]
-  simpa using (getBit_setBit_same (x := p j) (i := i) (b := l t) hij)
 
-/--
-Specialization to `A = activeAxes m (i+1)`.
+  -- First prove the pointwise read-after-write statement at axis `j`.
+  have hbit : getBit (writePlane A l p i j) i = l t := by
+    -- Reduce `writePlane` using `pos? A j = some t`, but orient the equality so that
+    -- simp can rewrite `setBit …` into `writePlane …`.
+    have hw : setBit (p j) i (l t) = writePlane A l p i j := by
+      -- `writePlane … j` is definitionally a `match` on `pos? A j`.
+      -- With `hpos : pos? A j = some t`, the match reduces to the `setBit` branch.
+      simp [writePlane, hpos]
+    -- Now it's exactly `getBit (setBit _ i (l t)) i = l t`.
+    simpa [hw] using (getBit_setBit_same (x := p j) (i := i) (b := l t) hij)
 
-This is the version used in the encode-after-decode induction at level `i+1`.
--/
+  -- Finally, `packPlane` at index `t` reads that same bit from axis `j`.
+  simpa [packPlane, j] using hbit
+
 theorem packPlane_writePlane_activeAxes
     {n : Nat} {m : Exponents n}
     (p : PointBV m) (i : Nat) (l : BV (activeAxes m (Nat.succ i)).length) :

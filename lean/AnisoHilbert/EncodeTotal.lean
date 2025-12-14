@@ -56,18 +56,20 @@ private theorem foldl_max_eq_or_exists {α : Type} (f : α → Nat) :
           by_cases hle : init ≤ f x
           · right
             have : Nat.max init (f x) = f x := Nat.max_eq_right hle
-            exact by simpa [this] using hr.symm
+            -- `hr : Nat.max init (f x) = r`, so rewriting by `this` yields `f x = r`.
+            exact by simpa [this] using hr
           · left
             have hle' : f x ≤ init := Nat.le_of_not_ge hle
             have : Nat.max init (f x) = init := Nat.max_eq_left hle'
-            exact by simpa [this] using hr.symm
+            -- `hr : Nat.max init (f x) = r`, so rewriting by `this` yields `init = r`.
+            exact by simpa [this] using hr
         cases this with
         | inl hin =>
             left
             exact hin
         | inr hfx =>
             right
-            refine ⟨x, by simp, hfx.symm⟩
+            refine ⟨x, by simp, hfx⟩
       · -- witness in tail
         right
         refine ⟨a, ?_, hfa⟩
