@@ -67,19 +67,18 @@ theorem packPlane_writePlane_same
   have hij : i < m j := by
     -- rewrite `j` into the hypothesis `hi`
     simpa [j] using (hi t)
-  -- First compute how `writePlane` acts on this active axis.
-  have hw : writePlane A l p i j = setBit (p j) i (l t) := by
-    simp [writePlane, hpos]
-  -- Now `packPlane` reads back exactly the bit we just wrote.
-  -- Using `getBit_setBit_same` avoids any definitional-equality issues around `Fin` proofs.
-  simpa [packPlane, j, hw] using
-    (getBit_setBit_same (x := p j) (i := i) (b := l t) hij)
 
-/--
-Specialization to `A = activeAxes m (i+1)`.
+  -- First prove the pointwise read-after-write statement at axis `j`.
+  have hbit : getBit (writePlane A l p i j) i = l t := by
+    have hw : writePlane A l p i j = setBit (p j) i (l t) := by
+      -- Reduce `writePlane` using `pos? A j = some t`.
+      simp [writePlane, hpos]
+    -- Now it's exactly `getBit (setBit _ i (l t)) i = l t`.
+    simpa [hw] using (getBit_setBit_same (x := p j) (i := i) (b := l t) hij)
 
-This is the version used in the encode-after-decode induction at level `i+1`.
--/
+  -- Finally, `packPlane` at index `t` reads that same bit from axis `j`.
+  simpa [packPlane, j] using hbit
+
 theorem packPlane_writePlane_activeAxes
     {n : Nat} {m : Exponents n}
     (p : PointBV m) (i : Nat) (l : BV (activeAxes m (Nat.succ i)).length) :

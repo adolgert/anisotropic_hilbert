@@ -43,9 +43,8 @@ lemma foldl_max_ge_of_mem {α : Type} (f : α → Nat) :
   | nil => cases hmem
   | cons x xs ih =>
       -- membership split
-      rcases List.mem_cons.mp hmem with hax | hmem'
-      · subst hax
-        -- a = x
+      rcases List.mem_cons.mp hmem with rfl | hmem'
+      · -- a = x
         -- f x ≤ max init (f x) ≤ foldl … (max init (f x)) xs
         have h₁ : f x ≤ Nat.max init (f x) := Nat.le_max_right _ _
         have h₂ : Nat.max init (f x) ≤ xs.foldl (fun acc y => Nat.max acc (f y)) (Nat.max init (f x)) :=
