@@ -63,17 +63,36 @@ theorem decodeFromLevel_preserves_ge
             cases s with
             | zero =>
                 -- Level `1`: decoder returns `some p1` iff `rest = []`.
-                -- Our preservation threshold is `1 ≤ t.val`.
-                -- TODO: Proof needs restructuring due to simp/let binding interaction.
-                -- The mathematical content is correct: writePlane only modifies plane 0,
-                -- and since t.val ≥ 1, the result at plane t is unchanged.
-                sorry
+                cases hk
+                cases rest with
+                | nil =>
+                    -- Simplify: decodeFromLevel 1 st [⟨A.length, w⟩] pAcc = some p1
+                    simp [decodeFromLevel, A, w', l, p1, stNext] at hDec
+                    -- hDec is now p1 = pOut
+                    rw [← hDec]
+                    -- Goal: p1 j t = pAcc j t
+                    have hne : t.val ≠ 0 := Nat.one_le_iff_ne_zero.mp ht
+                    exact PlaneRW.writePlane_ne A l pAcc 0 j t hne
+                | cons d2 rest2 =>
+                    simp [decodeFromLevel, A, w', l, p1, stNext] at hDec
             | succ s' =>
                 -- Recursive level: embed must succeed and then we recurse.
-                -- TODO: Proof needs restructuring due to simp/let binding interaction.
-                -- The mathematical content is correct: IH gives preservation at lower levels,
-                -- and writePlane_ne gives preservation at the current level.
-                sorry
+                cases hk
+                simp [decodeFromLevel, A, w', l, p1, stNext] at hDec
+                -- hDec is now about the match on embedState?
+                -- Split on the embedState? match.
+                split at hDec
+                · -- embedState? = none: contradicts hDec = some pOut
+                  exact Option.noConfusion hDec
+                · -- embedState? = some stRec
+                  rename_i stRec hEmb
+                  -- hDec : decodeFromLevel (succ s') stRec rest p1 = some pOut
+                  -- Apply IH: preservation at planes ≥ succ s'.
+                  have hIH : pOut j t = p1 j t := ih stRec rest p1 pOut hDec j t (Nat.le_of_succ_le ht)
+                  -- Apply writePlane_ne: p1 j t = pAcc j t since t.val ≠ succ s'.
+                  have hne : t.val ≠ Nat.succ s' := Nat.ne_of_gt (Nat.lt_of_succ_le ht)
+                  have hWP : p1 j t = pAcc j t := PlaneRW.writePlane_ne A l pAcc (Nat.succ s') j t hne
+                  exact hIH.trans hWP
           ·
             -- Width mismatch implies the decoder returns `none`.
             simp [decodeFromLevel, A, hk] at hDec

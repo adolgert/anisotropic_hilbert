@@ -62,14 +62,12 @@ theorem encodeFromLevel_of_decodeFromLevel
       | cons d rest =>
           -- `decodeFromLevel 0 _ (d::rest) _ = none`
           simp [decodeFromLevel] at hDec
-          cases hDec
   | succ s ih =>
       intro st ds pAcc pOut hDec
       cases ds with
       | nil =>
           -- `decodeFromLevel (succ _) _ [] _ = none`
           simp [decodeFromLevel] at hDec
-          cases hDec
       | cons d rest =>
           rcases d with ⟨kW, w⟩
           let A : List (Axis n) := activeAxes m (Nat.succ s)
@@ -78,7 +76,7 @@ theorem encodeFromLevel_of_decodeFromLevel
           ·
             -- Successful width branch: cast `w` to `BV A.length`.
             cases hk
-            have hk' : kW = A.length := rfl
+            -- After cases hk, kW is substituted with A.length
 
             let w' : BV A.length := w
             let l : BV A.length := Tinv st.e st.dPos.val (BV.gc w')
@@ -92,7 +90,7 @@ theorem encodeFromLevel_of_decodeFromLevel
                 cases rest with
                 | nil =>
                     simp at hDec
-                    cases hDec
+                    subst hDec
 
                     -- Read-after-write: packed plane at `0` is exactly `l`.
                     have hPack : packPlane A p1 0 = l := by
@@ -111,17 +109,16 @@ theorem encodeFromLevel_of_decodeFromLevel
                       simpa [hilbertStep, BV.Phi, hPlane] using hΦ
 
                     -- Encode at level `1` produces exactly `[⟨A.length, w'⟩]`.
-                    simp [encodeFromLevel, A, hw]
+                    simp [encodeFromLevel, A, hw, w', p1, l]
                 | cons d2 rest2 =>
                     -- With leftover digits, the decoder branch is `none`.
                     simp at hDec
-                    cases hDec
             | succ s' =>
                 -- Recursive case: decoder wrote plane `succ s'` and then recursed.
                 simp [decodeFromLevel, A, w', l, p1, stNext] at hDec
                 split at hDec
-                · -- embedState? = none contradicts success
-                  cases hDec
+                · -- embedState? = none contradicts hDec : none = some pOut
+                  exact Option.noConfusion hDec
                 · rename_i st' hEmb
                   have hRec : decodeFromLevel (m := m) (Nat.succ s') st' rest p1 = some pOut := by
                     exact hDec
@@ -136,7 +133,7 @@ theorem encodeFromLevel_of_decodeFromLevel
                       packPlane A pOut (Nat.succ s') = packPlane A p1 (Nat.succ s') :=
                     DecodePlanes.packPlane_decodeFromLevel_preserves_ge (m := m) (A := A)
                       (s := Nat.succ s') (st := st') (ds := rest)
-                      (pAcc := p1) (pOut := pOut) (i := Nat.succ s') (Nat.le_rfl) hRec
+                      (pAcc := p1) (pOut := pOut) (i := Nat.succ s') (Nat.le_refl _) hRec
 
                   -- Read-after-write on `p1`.
                   have hPackP1 : packPlane A p1 (Nat.succ s') = l := by
@@ -169,11 +166,10 @@ theorem encodeFromLevel_of_decodeFromLevel
                     simpa [hStepNext] using hEmb
 
                   -- Finish by unfolding `encodeFromLevel`.
-                  simp [encodeFromLevel, A, hw, hEmb', hEncRec]
+                  simp [encodeFromLevel, A, hw, w', hEmb', hEncRec, p1, l, stNext]
           ·
             -- Width mismatch would make the decoder `none`.
             simp [decodeFromLevel, A, hk] at hDec
-            cases hDec
 
 end LevelRight
 
@@ -200,7 +196,6 @@ theorem encodeDigits?_of_decodeDigits?
       | cons d rest =>
           -- decoder is `none`, contradicting `= some p`
           simp [hS] at hDec
-          cases hDec
   | succ s0 =>
       intro hDec
       let A0 : List (Axis n) := activeAxes m (Nat.succ s0)
@@ -208,7 +203,6 @@ theorem encodeDigits?_of_decodeDigits?
       | none =>
           -- decoder would be `none`
           simp [hS, A0, hInit] at hDec
-          cases hDec
       | some st0 =>
           -- Extract the level-decoding equation and apply the level lemma.
           have hDecLevel :

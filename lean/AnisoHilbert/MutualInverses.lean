@@ -41,18 +41,18 @@ lemma foldl_max_ge_of_mem {α : Type} (f : α → Nat) :
   intro init xs a hmem
   induction xs generalizing init with
   | nil => cases hmem
-  | cons x xs ih =>
+  | cons y ys ih =>
       -- membership split
       rcases List.mem_cons.mp hmem with rfl | hmem'
-      · -- a = x
-        -- f x ≤ max init (f x) ≤ foldl … (max init (f x)) xs
-        have h₁ : f x ≤ Nat.max init (f x) := Nat.le_max_right _ _
-        have h₂ : Nat.max init (f x) ≤ xs.foldl (fun acc y => Nat.max acc (f y)) (Nat.max init (f x)) :=
-          le_foldl_max (f := f) (init := Nat.max init (f x)) xs
+      · -- a = y
+        -- f a ≤ max init (f a) ≤ foldl … (max init (f a)) ys
+        have h₁ : f a ≤ Nat.max init (f a) := Nat.le_max_right _ _
+        have h₂ : Nat.max init (f a) ≤ ys.foldl (fun acc z => Nat.max acc (f z)) (Nat.max init (f a)) :=
+          le_foldl_max (f := f) (init := Nat.max init (f a)) ys
         simpa [List.foldl] using Nat.le_trans h₁ h₂
-      · -- a ∈ xs
+      · -- a ∈ ys
         -- foldl on cons reduces to tail foldl with updated init
-        simpa [List.foldl] using ih (init := Nat.max init (f x)) (a := a) hmem'
+        simpa [List.foldl] using ih (init := Nat.max init (f y)) hmem'
 
 /-- Each axis precision is bounded above by `mMax m`. -/
 theorem le_mMax {n : Nat} (m : Exponents n) (j : Axis n) : m j ≤ mMax m := by
@@ -71,10 +71,11 @@ theorem point_eq_pointZero_of_mMax_zero {n : Nat} {m : Exponents n}
     have hjle : m j ≤ mMax m := le_mMax (m := m) j
     have : m j ≤ 0 := by simpa [h0] using hjle
     exact Nat.eq_zero_of_le_zero this
-  cases hmj
-  -- now `p j : BV 0`, so extensionality closes (there are no indices)
+  -- p j : BV (m j) and pointZero j : BV (m j)
+  -- Since m j = 0, both are BV 0 which has a unique element
   funext t
-  exact t.elim0
+  -- t : Fin (m j) = Fin 0, which is empty
+  exact Fin.elim0 (hmj ▸ t)
 
 /-- If `s` is at least every axis precision, then `overwriteBelow _ p s = p`. -/
 theorem overwriteBelow_eq_src_of_ge {n : Nat} {m : Exponents n}
@@ -103,37 +104,71 @@ theorem decodeDigits?_encodeDigits?
       -- Decode and rewrite by `hp0`.
       simp [decodeDigits?, hS, hp0]
   | succ s0 =>
-      -- Unfold `encodeDigits?` to obtain the initial state and the level-encoding equality.
-      have hEnc' :
-          match initState? (n := n) (activeAxes m (Nat.succ s0)) with
-          | none => none
-          | some st0 => encodeFromLevel (m := m) p (Nat.succ s0) st0
-          = some ds := by
-        simpa [encodeDigits?, hS] using h
+      -- Work with activeAxes m (mMax m) directly
+      let A0 : List (Axis n) := activeAxes m (mMax m)
+      have hA0 : A0 = activeAxes m (Nat.succ s0) := by
+        show activeAxes m (mMax m) = activeAxes m (Nat.succ s0)
+        rw [hS]
       -- Case split on `initState?`.
-      cases hInit : initState? (n := n) (activeAxes m (Nat.succ s0)) with
+      cases hInit : initState? (n := n) A0 with
       | none =>
-          -- Contradiction: encoder cannot be `none` if it equals `some ds`.
-          simp [hInit] at hEnc'
+          -- Contradiction: encoder would return `none`, but `h` says it's `some ds`.
+          exfalso
+          simp only [encodeDigits?] at h
+          split at h
+          · -- mMax m = 0: contradicts hS
+            rename_i hmm0
+            omega
+          · -- mMax m = succ _
+            split at h
+            · -- initState? = none: h says none = some ds, contradiction
+              exact Option.noConfusion h
+            · -- initState? = some _: but hInit says it's none
+              rename_i st' hSome
+              exact Option.noConfusion (hSome.symm.trans hInit)
       | some st0 =>
           -- Extract the per-level encoding equation.
-          have hEncLevel : encodeFromLevel (m := m) p (Nat.succ s0) st0 = some ds := by
-            simpa [hInit] using hEnc'
+          have hEncLevel : encodeFromLevel (m := m) p (mMax m) st0 = some ds := by
+            simp only [encodeDigits?] at h
+            split at h
+            · -- mMax m = 0: contradicts hS
+              rename_i hmm0
+              omega
+            · -- mMax m = succ _
+              split at h
+              · -- initState? = none: contradicts hInit
+                rename_i hNone
+                exact Option.noConfusion (hNone.symm.trans hInit)
+              · -- initState? = some st'
+                rename_i st' hSome
+                cases Option.some.inj (hSome.symm.trans hInit)
+                exact h
           -- Apply the level-indexed lemma with accumulator `pointZero`.
           have hDecLevel :
-              decodeFromLevel (m := m) (Nat.succ s0) st0 ds (pointZero (m := m)) =
-                some (overwriteBelow (pointZero (m := m)) p (Nat.succ s0)) :=
+              decodeFromLevel (m := m) (mMax m) st0 ds (pointZero (m := m)) =
+                some (overwriteBelow (pointZero (m := m)) p (mMax m)) :=
             Level.decodeFromLevel_encodeFromLevel (m := m) (p := p)
-              (s := Nat.succ s0) (pAcc := pointZero (m := m)) (st := st0) (ds := ds) hEncLevel
+              (s := mMax m) (pAcc := pointZero (m := m)) (st := st0) (ds := ds) hEncLevel
           -- `overwriteBelow pointZero p (mMax m) = p` because `m j ≤ mMax m` for all axes.
-          have hOw : overwriteBelow (pointZero (m := m)) p (Nat.succ s0) = p := by
-            exact overwriteBelow_eq_src_of_ge (dst := pointZero (m := m)) (p := p) (s := Nat.succ s0)
-              (hs := fun j => by
-                -- `Nat.succ s0 = mMax m` by `hS`.
-                have : m j ≤ mMax m := le_mMax (m := m) j
-                simpa [hS] using this)
-          -- Finish by unfolding the top-level decoder and rewriting.
-          simpa [decodeDigits?, hS, hInit, hOw] using hDecLevel
+          have hOw : overwriteBelow (pointZero (m := m)) p (mMax m) = p := by
+            exact overwriteBelow_eq_src_of_ge (dst := pointZero (m := m)) (p := p) (s := mMax m)
+              (hs := fun j => le_mMax (m := m) j)
+          -- Finish by unfolding the top-level decoder and using split
+          simp only [decodeDigits?]
+          split
+          · -- mMax m = 0: contradicts hS
+            rename_i hmm0
+            omega
+          · -- mMax m = succ _
+            split
+            · -- initState? = none: contradicts hInit
+              rename_i hNone
+              exact Option.noConfusion (hNone.symm.trans hInit)
+            · -- initState? = some st'
+              rename_i st' hSome
+              cases Option.some.inj (hSome.symm.trans hInit)
+              simp only [hOw] at hDecLevel
+              exact hDecLevel
 
 end Mutual
 

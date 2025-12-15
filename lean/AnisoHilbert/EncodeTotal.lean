@@ -83,7 +83,7 @@ private theorem activeAxes_length_pos_of_mMax_eq_succ
   -- Show that the max value is attained by some axis in `allAxes n`.
   have hAttain : ∃ j ∈ allAxes n, m j = Nat.succ s0 := by
     -- Apply the generic fold lemma to the specific `mMax` fold.
-    have h0 : 0 ≠ Nat.succ s0 := Nat.succ_ne_zero _
+    have h0 : 0 ≠ Nat.succ s0 := (Nat.succ_ne_zero s0).symm
     -- Either the fold result equals the initial `0` or it is attained on the list.
     have hOr :=
       foldl_max_eq_or_exists (f := fun j : Axis n => m j) (xs := allAxes n) (init := 0)
@@ -104,7 +104,7 @@ private theorem activeAxes_length_pos_of_mMax_eq_succ
   -- Hence the list is nonempty, so its length is positive.
   cases hL : activeAxes m (Nat.succ s0) with
   | nil =>
-      cases (by simpa [hL] using hjAct)
+      simp [hL] at hjAct
   | cons a tail =>
       simp [hL]
 
@@ -155,15 +155,47 @@ theorem encodeDigits?_exists
       refine ⟨[], ?_⟩
       simp [encodeDigits?, hS]
   | succ s0 =>
-      let A0 : List (Axis n) := activeAxes m (Nat.succ s0)
-      have hlen : 0 < A0.length := activeAxes_length_pos_of_mMax_eq_succ (m := m) (s0 := s0) hS
+      -- Work directly with activeAxes m (mMax m) using the equality hS
+      let A0 : List (Axis n) := activeAxes m (mMax m)
+      -- A0 = activeAxes m (s0+1) after rewriting with hS
+      have hA0 : A0 = activeAxes m (Nat.succ s0) := by
+        show activeAxes m (mMax m) = activeAxes m (Nat.succ s0)
+        rw [hS]
+      have hlen : 0 < A0.length := by
+        rw [hA0]
+        exact activeAxes_length_pos_of_mMax_eq_succ (m := m) (s0 := s0) hS
       -- With `hlen`, `initState?` reduces to `some st0`.
       let st0 : State n A0 := State.mk' (A := A0) (e := BV.zero) (dPos := ⟨0, hlen⟩)
       have hInit : initState? (n := n) A0 = some st0 := by
         simp [initState?, st0, hlen]
-      rcases encodeFromLevel_exists (m := m) (p := p) (s := Nat.succ s0) (st := st0) with ⟨ds, hds⟩
+      -- For encodeFromLevel_exists, we need st : State n (activeAxes m (s0+1))
+      -- But st0 : State n A0 = State n (activeAxes m (mMax m))
+      -- These are definitionally equal after simp [hS]
+      have hds := encodeFromLevel_exists (m := m) (p := p) (s := mMax m) (st := st0)
+      rcases hds with ⟨ds, hds⟩
       refine ⟨ds, ?_⟩
-      simp [encodeDigits?, hS, hInit, hds]
+      simp only [encodeDigits?]
+      -- Now split the outer match on mMax m
+      split
+      · -- mMax m = 0 case: impossible since hS says mMax m = s0 + 1
+        rename_i hmm0
+        omega
+      · -- mMax m = succ _ case
+        -- Now split the inner match on initState?
+        split
+        · -- initState? = none: contradicts hInit
+          rename_i hNone
+          -- hNone : initState? (activeAxes m (mMax m)) = none
+          -- hInit : initState? A0 = some st0 where A0 = activeAxes m (mMax m)
+          -- These contradict each other (A0 unfolds to activeAxes m (mMax m))
+          exact Option.noConfusion (hNone.symm.trans hInit)
+        · -- initState? = some st': use hds
+          rename_i st' hSome
+          -- hSome : initState? (activeAxes m (mMax m)) = some st'
+          -- hInit : initState? A0 = some st0 where A0 = activeAxes m (mMax m)
+          -- So st' = st0
+          cases Option.some.inj (hSome.symm.trans hInit)
+          exact hds
 
 /-- A proof-friendly, total per-level encoder obtained by choice. -/
 noncomputable def encodeFromLevel!
