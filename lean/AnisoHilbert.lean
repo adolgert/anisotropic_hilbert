@@ -1,8 +1,10 @@
 import AnisoHilbert.Representation
 import AnisoHilbert.Step
 import AnisoHilbert.Lemma41
+import AnisoHilbert.GrayAdjacencyLemmas
 import AnisoHilbert.Loops
 import AnisoHilbert.IndexSucc
+import AnisoHilbert.DigitsSuccDecomp
 import AnisoHilbert.ActiveAxesLemmas
 import AnisoHilbert.EmbedLemmas
 import AnisoHilbert.PlaneAccumulatorLemmas
@@ -11,9 +13,6 @@ import AnisoHilbert.AdjacencyLemmas
 import AnisoHilbert.MutualInverses
 import AnisoHilbert.PlaneReadWriteLemmas
 import AnisoHilbert.DecodeHigherPlaneLemmas
-import AnisoHilbert.DecodeHeadUpperLemmas
 import AnisoHilbert.EncodeAfterDecode
 import AnisoHilbert.EncodeTotal
 import AnisoHilbert.MutualInversesTotal
-import AnisoHilbert.DigitsSuccNormalForm
-import AnisoHilbert.DecodeHeadXorLemmas
