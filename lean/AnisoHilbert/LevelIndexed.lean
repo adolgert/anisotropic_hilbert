@@ -90,14 +90,20 @@ theorem decodeFromLevel_encodeFromLevel
   induction s with
   | zero =>
       intro pAcc st ds hEnc
-      -- `encodeFromLevel p 0 _ = some []`.
-      simp [encodeFromLevel] at hEnc
-      cases hEnc
-      -- `decodeFromLevel 0 _ [] pAcc = some pAcc` and `overwriteBelow _ _ 0 = pAcc`.
+      -- At level `0`, the encoder always returns `[]`, so the digit stream must be `[]`.
+      have hds : ds = [] := by
+        simpa [encodeFromLevel] using hEnc
+      subst hds
+
+      -- Now the decoder at level `0` reduces to the accumulator unchanged.
+      -- The remaining goal is exactly `pAcc = overwriteBelow pAcc p 0`.
       simp [decodeFromLevel]
+
+      -- And `overwriteBelow _ _ 0` is pointwise the identity on its destination.
       funext j
       funext t
-      simp [overwriteBelow]
+      have ht : ¬ t.val < 0 := Nat.not_lt_zero _
+      simp [overwriteBelow, ht]
   | succ s0 ih =>
       intro pAcc st ds hEnc
       -- Split on whether `s0 = 0` (one level left) or `s0 = succ s` (true recursion).
