@@ -15,3 +15,4 @@ import AnisoHilbert.DecodeHeadUpperLemmas
 import AnisoHilbert.EncodeAfterDecode
 import AnisoHilbert.EncodeTotal
 import AnisoHilbert.MutualInversesTotal
+import AnisoHilbert.DigitsSuccNormalForm
