@@ -1,15 +1,7 @@
 import AnisoHilbert.Step
 import AnisoHilbert.Lemma41
-import Mathlib.Data.Nat.BinaryRec
-import Mathlib.Data.Nat.Bits
 
 namespace AnisoHilbert
-
-/-- Legacy bit0: double a natural number. Defined as `Nat.bit false n = 2*n`. -/
-abbrev Nat.bit0 (n : Nat) : Nat := Nat.bit false n
-
-/-- Legacy bit1: double and add one. Defined as `Nat.bit true n = 2*n + 1`. -/
-abbrev Nat.bit1 (n : Nat) : Nat := Nat.bit true n
 
 /-!
 Gray-code adjacency facts.
@@ -46,43 +38,42 @@ private lemma testBit_succ_zero (m : Nat) : Nat.testBit (m.succ) 0 = ! Nat.testB
   have hlt : m % 2 < 2 := Nat.mod_lt _ (by decide)
   cases hmod : m % 2 with
   | zero =>
-      -- even: m = (m/2)*2, so `m = Nat.bit0 (m/2)` and `m+1 = Nat.bit1 (m/2)`.
+      -- even: m = (m/2)*2, so `m = bit0 (m/2)` and `m+1 = bit1 (m/2)`.
       let t := m / 2
       have hdiv : t * 2 + m % 2 = m := by
-        have h := Nat.div_add_mod m 2
-        rw [Nat.mul_comm] at h
-        exact h
-      have hm : m = Nat.bit0 t := by
+        simpa [t] using (Nat.div_add_mod m 2)
+      have hm : m = bit0 t := by
         -- from `t*2 + 0 = m`
         have : t * 2 = m := by simpa [hmod] using hdiv
-        -- `t*2 = t+t = Nat.bit0 t`
+        -- `t*2 = t+t = bit0 t`
         calc
           m = t * 2 := this.symm
-          _ = Nat.bit0 t := by simp [Nat.bit0, Nat.bit, Nat.mul_comm]
-      have hms : m.succ = Nat.bit1 t := by
-        -- `Nat.bit1 t = Nat.bit0 t + 1`
-        simp [hm, Nat.bit1, Nat.bit0, Nat.bit, Nat.succ_eq_add_one, cond_false, cond_true]
-      simp only [hm, hms, Nat.bit0, Nat.bit1, Nat.testBit_bit_zero]
+          _ = bit0 t := by simp [Nat.mul_two, bit0]
+      have hms : m.succ = bit1 t := by
+        -- `bit1 t = bit0 t + 1`
+        simp [hm, bit1, Nat.succ_eq_add_one]
+      simp [hm, hms]
   | succ r =>
       cases r with
       | zero =>
-          -- odd: m = (m/2)*2 + 1, so `m = Nat.bit1 (m/2)` and `m+1 = Nat.bit0 ((m/2)+1)`.
+          -- odd: m = (m/2)*2 + 1, so `m = bit1 (m/2)` and `m+1 = bit0 ((m/2)+1)`.
           let t := m / 2
           have hdiv : t * 2 + m % 2 = m := by
-            have h := Nat.div_add_mod m 2
-            rw [Nat.mul_comm] at h
-            exact h
-          have hm : m = Nat.bit1 t := by
+            simpa [t] using (Nat.div_add_mod m 2)
+          have hm : m = bit1 t := by
             have : t * 2 + 1 = m := by simpa [hmod] using hdiv
-            -- `Nat.bit1 t = Nat.bit0 t + 1 = t*2 + 1`
+            -- `bit1 t = bit0 t + 1 = t*2 + 1`
             calc
               m = t * 2 + 1 := this.symm
-              _ = Nat.bit1 t := by simp [Nat.bit1, Nat.bit0, Nat.bit, Nat.mul_comm]
-          have hms : m.succ = Nat.bit0 (t.succ) := by
+              _ = bit1 t := by simp [bit1, bit0, Nat.mul_two, Nat.succ_eq_add_one, Nat.add_assoc]
+          have hms : m.succ = bit0 (t.succ) := by
             -- (2*t+1)+1 = 2*(t+1)
-            simp only [hm, Nat.bit1, Nat.bit0, Nat.bit, Nat.succ_eq_add_one, cond_false, cond_true]
-            omega
-          simp only [hm, hms, Nat.bit0, Nat.bit1, Nat.testBit_bit_zero]
+            -- write everything in terms of `t*2` and `mul_two`.
+            --
+            -- `simp` will normalize `bit0`/`bit1` and arithmetic.
+            simp [hm, bit1, bit0, Nat.mul_two, Nat.succ_eq_add_one, Nat.add_assoc, Nat.add_left_comm,
+              Nat.add_comm]
+          simp [hm, hms]
       | succ r2 =>
           -- impossible since `m % 2 < 2`
           exfalso
@@ -93,34 +84,34 @@ private lemma testBit_succ_zero (m : Nat) : Nat.testBit (m.succ) 0 = ! Nat.testB
 ### `ofNat` and `gc` shift lemmas
 
 When we pass from width `k` to width `k+1`, and look at indices `Fin.succ j`,
-`ofNat (Nat.bit0 m)` and `ofNat (Nat.bit1 m)` behave like `ofNat m`.
+`ofNat (bit0 m)` and `ofNat (bit1 m)` behave like `ofNat m`.
 This is the usual right-shift on binary representations.
 -/
 
-private lemma ofNat_bit0_zero {k : Nat} (m : Nat) : (ofNat (k := Nat.succ k) (Nat.bit0 m)) 0 = false := by
+private lemma ofNat_bit0_zero {k : Nat} (m : Nat) : (ofNat (k := Nat.succ k) (bit0 m)) 0 = false := by
   simp [ofNat]
 
-private lemma ofNat_bit1_zero {k : Nat} (m : Nat) : (ofNat (k := Nat.succ k) (Nat.bit1 m)) 0 = true := by
+private lemma ofNat_bit1_zero {k : Nat} (m : Nat) : (ofNat (k := Nat.succ k) (bit1 m)) 0 = true := by
   simp [ofNat]
 
 private lemma ofNat_bit0_succ {k : Nat} (m : Nat) (j : Fin k) :
-    (ofNat (k := Nat.succ k) (Nat.bit0 m)) (Fin.succ j) = (ofNat (k := k) m) j := by
+    (ofNat (k := Nat.succ k) (bit0 m)) (Fin.succ j) = (ofNat (k := k) m) j := by
   -- `testBit (2*m) (j+1) = testBit m j`
   simp [ofNat]
 
 private lemma ofNat_bit1_succ {k : Nat} (m : Nat) (j : Fin k) :
-    (ofNat (k := Nat.succ k) (Nat.bit1 m)) (Fin.succ j) = (ofNat (k := k) m) j := by
+    (ofNat (k := Nat.succ k) (bit1 m)) (Fin.succ j) = (ofNat (k := k) m) j := by
   -- `testBit (2*m+1) (j+1) = testBit m j`
   simp [ofNat]
 
 private lemma gc_ofNat_bit0_succ {k : Nat} (m : Nat) (j : Fin k) :
-    (gc (ofNat (k := Nat.succ k) (Nat.bit0 m))) (Fin.succ j) = (gc (ofNat (k := k) m)) j := by
+    (gc (ofNat (k := Nat.succ k) (bit0 m))) (Fin.succ j) = (gc (ofNat (k := k) m)) j := by
   -- unfold `gc` and use the `ofNat` shift facts
   -- `gc x i = x i XOR getBit x (i+1)`
   simp [gc, xor, shr1, getBit, ofNat_bit0_succ, ofNat]
 
 private lemma gc_ofNat_bit1_succ {k : Nat} (m : Nat) (j : Fin k) :
-    (gc (ofNat (k := Nat.succ k) (Nat.bit1 m))) (Fin.succ j) = (gc (ofNat (k := k) m)) j := by
+    (gc (ofNat (k := Nat.succ k) (bit1 m))) (Fin.succ j) = (gc (ofNat (k := k) m)) j := by
   simp [gc, xor, shr1, getBit, ofNat_bit1_succ, ofNat]
 
 /-!
@@ -143,18 +134,18 @@ theorem xor_gc_ofNat_succ_eq_oneHotFin
       have hlt : i % 2 < 2 := Nat.mod_lt _ (by decide)
       cases hmod : i % 2 with
       | zero =>
-          -- even case: `tsb i = 0`, and `i = Nat.bit0 (i/2)`
+          -- even case: `tsb i = 0`, and `i = bit0 (i/2)`
           let m : Nat := i / 2
-          have hi : i = Nat.bit0 m := by
+          have hi : i = bit0 m := by
               have h := Nat.div_add_mod i 2
               have hm2 : m * 2 = i := by
                 -- `i / 2 * 2 + i % 2 = i`
                 simpa [m, hmod, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h
               calc
                 i = m * 2 := by simpa using hm2.symm
-                _ = Nat.bit0 m := by simp [Nat.mul_two, Nat.bit0]
-          have hsucc : i.succ = Nat.bit1 m := by
-              simp [hi, Nat.bit1, Nat.bit0, Nat.succ_eq_add_one, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
+                _ = bit0 m := by simp [Nat.mul_two, bit0]
+          have hsucc : i.succ = bit1 m := by
+              simp [hi, bit1, bit0, Nat.succ_eq_add_one, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
           have htsb : tsb i = 0 := by
             simp [tsb, hmod]
           -- show pointwise equality
@@ -165,7 +156,7 @@ theorem xor_gc_ofNat_succ_eq_oneHotFin
             -- so the Gray code differs at bit 0.
             subst hi; subst hsucc
             -- simplify to a Bool identity
-            -- (we also rewrite `tsb (Nat.bit0 m)` to `0` so the RHS is `oneHotFin 0`)
+            -- (we also rewrite `tsb (bit0 m)` to `0` so the RHS is `oneHotFin 0`)
             simp [oneHotFin, htsb, ofNat_bit0_zero, ofNat_bit1_zero, gc, xor, shr1, getBit, ofNat]
           · intro j
             subst hi; subst hsucc
@@ -174,19 +165,19 @@ theorem xor_gc_ofNat_succ_eq_oneHotFin
       | succ r =>
           cases r with
           | zero =>
-              -- odd case: `i = Nat.bit1 (i/2)`, `i+1 = Nat.bit0 ((i/2)+1)`
+              -- odd case: `i = bit1 (i/2)`, `i+1 = bit0 ((i/2)+1)`
               let m : Nat := i / 2
-              have hi : i = Nat.bit1 m := by
+              have hi : i = bit1 m := by
                       have h := Nat.div_add_mod i 2
                       have hm2 : m * 2 + 1 = i := by
                         -- `i / 2 * 2 + i % 2 = i`
                         simpa [m, hmod, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h
                       calc
                         i = m * 2 + 1 := by simpa using hm2.symm
-                        _ = Nat.bit1 m := by simp [Nat.bit1, Nat.bit0, Nat.mul_two, Nat.add_assoc]
-              have hsucc : i.succ = Nat.bit0 (m.succ) := by
+                        _ = bit1 m := by simp [bit1, bit0, Nat.mul_two, Nat.add_assoc]
+              have hsucc : i.succ = bit0 (m.succ) := by
                 -- (2*m+1)+1 = 2*(m+1)
-                simp [hi, Nat.bit1, Nat.bit0, Nat.succ_eq_add_one, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm,
+                simp [hi, bit1, bit0, Nat.succ_eq_add_one, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm,
                   Nat.mul_add, Nat.add_mul, Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc]
               have htsb : tsb i = Nat.succ (tsb m) := by
                 -- `i % 2 = 1` so we take the recursive branch
