@@ -1,0 +1,403 @@
+import Mathlib
+
+import AnisoHilbert.AdjacencyLemmas
+import AnisoHilbert.BVNatLemmas
+import AnisoHilbert.Loops
+import AnisoHilbert.RotLOneHotLemmas
+
+namespace AnisoHilbert
+
+namespace State
+
+open BV
+
+/-- Exit corner label `f = e ⊕ 2^d` (in one-hot form) for a Hilbert state. -/
+def exitCorner {n : Nat} {A : List (Axis n)} (st : State n A) : BV A.length :=
+  BV.xor st.e (BV.oneHotFin st.dPos)
+
+end State
+
+namespace BV
+
+open scoped BigOperators
+
+theorem xor_assoc {k : Nat} (x y z : BV k) : xor (xor x y) z = xor x (xor y z) := by
+  funext i
+  simpa [xor] using (BV.bxor_assoc (x i) (y i) (z i))
+
+theorem xor_comm {k : Nat} (x y : BV k) : xor x y = xor y x := by
+  funext i
+  cases hx : x i <;> cases hy : y i <;> simp [xor, bxor, hx, hy]
+
+theorem sub_one_lt_of_pos {k : Nat} (hk : 0 < k) : k - 1 < k :=
+  Nat.sub_lt_of_pos_le (by decide : 0 < 1) (Nat.succ_le_of_lt hk)
+
+private theorem two_pow_ge_two {k : Nat} (hk : 0 < k) : 2 ≤ 2 ^ k := by
+  cases k with
+  | zero =>
+      cases (Nat.not_lt_zero 0 hk)
+  | succ k' =>
+      -- `2^(k'+1) = 2^k' * 2 ≥ 1 * 2 = 2`.
+      have hpow : 1 ≤ 2 ^ k' := Nat.succ_le_iff.2 (Nat.pow_pos (n := k') (Nat.succ_pos 1))
+      have hmul : 2 * 1 ≤ 2 * (2 ^ k') := Nat.mul_le_mul_left 2 hpow
+      -- rewrite `2^(k'+1)` and commute the multiplication.
+      simpa [Nat.pow_succ, Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm] using hmul
+
+private theorem tsb_two_pow_sub_one : ∀ k : Nat, tsb (2 ^ k - 1) = k := by
+  intro k
+  induction k with
+  | zero =>
+      simp [tsb]
+  | succ k ih =>
+      -- `2^(k+1) - 1` is odd, so `tsb` recurses once.
+      have hmod : (2 ^ Nat.succ k - 1) % 2 = 1 := by
+        -- `2^(k+1)` is even.
+        have : (2 ^ Nat.succ k) % 2 = 0 := by
+          simp [Nat.pow_succ, Nat.mul_mod]
+        -- so `2^(k+1) - 1` is odd
+        -- `simp` knows how to reduce `% 2` on `x - 1` when `x % 2 = 0`.
+        have hk2 : 2 ≤ 2 ^ Nat.succ k := two_pow_ge_two (k := Nat.succ k) (Nat.succ_pos k)
+        -- use the fact `2 ^ (k+1) ≥ 1` so subtraction is not clamped
+        have hpos : 0 < 2 ^ Nat.succ k := Nat.pow_pos (n := Nat.succ k) (Nat.succ_pos 1)
+        -- brute force via rewriting to `2 * t + 1`
+        have hrepr : 2 ^ Nat.succ k - 1 = 1 + 2 * (2 ^ k - 1) := by
+          -- set `x := 2^k` to keep the arithmetic linear
+          set x : Nat := 2 ^ k
+          have hx : 0 < x := Nat.pow_pos (n := k) (Nat.succ_pos 1)
+          -- `2^(k+1) = 2*x`
+          calc
+            2 ^ Nat.succ k - 1 = 2 * x - 1 := by
+              simp [x, Nat.pow_succ, Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+            _ = 1 + 2 * (x - 1) := by
+              -- `2*x - 1 = 2*(x-1) + 1`, then commute.
+              have hx1 : 1 ≤ x := Nat.succ_le_of_lt hx
+              have hx2 : 2 ≤ 2 * x := Nat.le_trans (by decide : 2 ≤ 2) (Nat.mul_le_mul_left 2 hx1)
+              -- show `2*x - 1 = 2*x - 2 + 1`
+              have hsub : 2 * x - 1 = 2 * x - 2 + 1 := by
+                have hxA : 1 ≤ 2 * x := Nat.le_trans (by decide : 1 ≤ 2) hx2
+                apply (Nat.sub_eq_iff_eq_add hxA).2
+                -- `2*x = (2*x - 2 + 1) + 1`
+                calc
+                  2 * x = 2 * x - 2 + 2 := (Nat.sub_add_cancel hx2).symm
+                  _ = (2 * x - 2 + 1) + 1 := by omega
+              -- rewrite `2*(x-1)` as `2*x - 2`
+              -- and normalize to `1 + 2*(x-1)`
+              calc
+                2 * x - 1 = 2 * x - 2 + 1 := hsub
+                _ = 2 * (x - 1) + 1 := by
+                      simp [Nat.mul_sub_left_distrib, Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm,
+                        Nat.add_assoc, Nat.add_left_comm, Nat.add_comm]
+                _ = 1 + 2 * (x - 1) := by ac_rfl
+            _ = 1 + 2 * (2 ^ k - 1) := by simp [x, Nat.mul_sub_left_distrib, Nat.mul_assoc]
+        -- now reduce modulo 2 from the explicit representation
+        simpa [hrepr] using (by decide : (1 + 2 * (2 ^ k - 1)) % 2 = 1)
+      have hdiv : (2 ^ Nat.succ k - 1) / 2 = 2 ^ k - 1 := by
+        -- Use the same `1 + 2*(...)` representation and `add_mul_div_left`.
+        have hrepr : 2 ^ Nat.succ k - 1 = 1 + 2 * (2 ^ k - 1) := by
+          -- Reuse `hmod`-proof's internal representation.
+          -- (Duplicated for simplicity.)
+          set x : Nat := 2 ^ k
+          have hx : 0 < x := Nat.pow_pos (n := k) (Nat.succ_pos 1)
+          calc
+            2 ^ Nat.succ k - 1 = 2 * x - 1 := by
+              simp [x, Nat.pow_succ, Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+            _ = 1 + 2 * (x - 1) := by
+              have hx1 : 1 ≤ x := Nat.succ_le_of_lt hx
+              have hx2 : 2 ≤ 2 * x := Nat.le_trans (by decide : 2 ≤ 2) (Nat.mul_le_mul_left 2 hx1)
+              have hsub : 2 * x - 1 = 2 * x - 2 + 1 := by
+                have hxA : 1 ≤ 2 * x := Nat.le_trans (by decide : 1 ≤ 2) hx2
+                apply (Nat.sub_eq_iff_eq_add hxA).2
+                calc
+                  2 * x = 2 * x - 2 + 2 := (Nat.sub_add_cancel hx2).symm
+                  _ = (2 * x - 2 + 1) + 1 := by omega
+              calc
+                2 * x - 1 = 2 * x - 2 + 1 := hsub
+                _ = 2 * (x - 1) + 1 := by
+                      simp [Nat.mul_sub_left_distrib, Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm,
+                        Nat.add_assoc, Nat.add_left_comm, Nat.add_comm]
+                _ = 1 + 2 * (x - 1) := by ac_rfl
+            _ = 1 + 2 * (2 ^ k - 1) := by simp [x, Nat.mul_sub_left_distrib, Nat.mul_assoc]
+        -- divide by 2
+        have := congrArg (fun n => n / 2) hrepr
+        -- `Nat.add_mul_div_left` with `y = 2`
+        simpa [Nat.add_mul_div_left, Nat.div_eq_of_lt, Nat.succ_eq_add_one] using this
+      -- Now compute `tsb`.
+      simp [tsb, hmod, hdiv, ih]
+
+private theorem childDir_two_pow_sub_one {k : Nat} (hk : 0 < k) :
+    childDir k (2 ^ k - 1) = 0 := by
+  have htsb : tsb (2 ^ k - 1) = k := tsb_two_pow_sub_one k
+  -- For `w ≠ 0`, `2^k - 1` is odd, so `childDir` uses the `w % 2 = 1` branch.
+  have hne : (2 ^ k - 1) ≠ 0 := by
+    have hk2 : 2 ≤ 2 ^ k := two_pow_ge_two (k := k) hk
+    -- `2^k - 1 ≥ 1`
+    have : 1 ≤ 2 ^ k - 1 := by
+      have h1lt : 1 < 2 ^ k := Nat.lt_of_lt_of_le (by decide : 1 < 2) hk2
+      exact Nat.succ_le_of_lt (Nat.sub_pos_of_lt h1lt)
+    exact Nat.ne_of_gt (Nat.pos_of_ne_zero (by
+      intro h0
+      have : 1 ≤ (0 : Nat) := by simpa [h0] using this
+      exact Nat.not_succ_le_zero 0 this))
+  have hodd : (2 ^ k - 1) % 2 ≠ 0 := by
+    -- Oddness: `w % 2 = 1`.
+    have : (2 ^ k - 1) % 2 = 1 := by
+      -- `simp` reduces this goal to the assumption `0 < k`.
+      simpa using hk
+    exact (Nat.mod_two_ne_zero).2 this
+  -- Unfold `childDir` and simplify.
+  simp [childDir, hne, Nat.mod_two_ne_zero.mp hodd, htsb]
+
+private theorem gc_ofNat_two_pow_sub_one_eq_oneHotFin_last {k : Nat} (hk : 0 < k) :
+    gc (ofNat (k := k) (2 ^ k - 1)) = oneHotFin ⟨k - 1, sub_one_lt_of_pos hk⟩ := by
+  cases k with
+  | zero =>
+      cases (Nat.not_lt_zero 0 hk)
+  | succ k' =>
+      let n : Nat := Nat.succ k'
+      let last : Fin n := ⟨k', Nat.lt_succ_self k'⟩
+      funext i
+      by_cases hlast : i = last
+      · subst hlast
+        -- At the last bit: `x = 1`, `x>>1 = 0`.
+        simp [n, gc, xor, shr1, ofNat, getBit, oneHotFin, last, Nat.testBit_two_pow_sub_one, bxor]
+      ·
+        -- If `i ≠ last`, then `i.val < k'`.
+        have hi : (i.val : Nat) < k' := by
+          have hiLe : (i.val : Nat) ≤ k' := (Nat.lt_succ_iff.mp i.isLt)
+          refine Nat.lt_of_le_of_ne hiLe ?_
+          intro hEq
+          apply hlast
+          apply Fin.ext
+          simpa [last] using hEq
+        have hiSucc : (i.val : Nat) + 1 < n := by
+          have hiLe' : (i.val : Nat).succ ≤ k' := Nat.succ_le_of_lt hi
+          have : (i.val : Nat).succ < n := Nat.lt_of_le_of_lt hiLe' (Nat.lt_succ_self k')
+          simpa [n, Nat.succ_eq_add_one] using this
+
+        -- For `i ≠ last`, both `x i` and `(x>>1) i` are `1`, so Gray code bit is `0`.
+        simp [n, gc, xor, shr1, ofNat, getBit, oneHotFin, last, hlast, Nat.testBit_two_pow_sub_one, i.isLt,
+          hiSucc, hi, bxor]
+
+private theorem tsb_two_pow_sub_two {k : Nat} (hk : 0 < k) : tsb (2 ^ k - 2) = 0 := by
+  -- `2` divides `2^k - 2`, so the number is even and `tsb` is `0`.
+  have hpow : 2 ∣ 2 ^ k := by
+    cases k with
+    | zero =>
+        cases (Nat.not_lt_zero 0 hk)
+    | succ k' =>
+        refine ⟨2 ^ k', ?_⟩
+        simp [Nat.pow_succ, Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc]
+  have h2 : 2 ∣ 2 := ⟨1, by simp⟩
+  have hdvd : 2 ∣ 2 ^ k - 2 := Nat.dvd_sub hpow h2
+  have hmod : (2 ^ k - 2) % 2 = 0 := Nat.mod_eq_zero_of_dvd hdvd
+  simp [tsb, hmod]
+
+private theorem gc_ofNat_two_pow_sub_two_eq_xor_oneHotFin_zero_last {k : Nat} (hk : 0 < k) :
+    gc (ofNat (k := k) (2 ^ k - 2))
+      =
+    xor (oneHotFin ⟨0, hk⟩) (oneHotFin ⟨k - 1, sub_one_lt_of_pos hk⟩) := by
+  let i : Nat := 2 ^ k - 2
+  have htsb : tsb i = 0 := by
+    simpa [i] using tsb_two_pow_sub_two (k := k) hk
+  have ht : tsb i < k := by
+    simpa [htsb] using hk
+  have hAdj :
+      xor (gc (ofNat (k := k) i)) (gc (ofNat (k := k) i.succ)) = oneHotFin ⟨tsb i, ht⟩ := by
+    simpa [i] using (xor_gc_ofNat_succ_eq_oneHotFin (k := k) i ht)
+
+  have hIdx : (⟨tsb i, ht⟩ : Fin k) = ⟨0, hk⟩ := by
+    apply Fin.ext
+    simp [htsb]
+
+  have hAdj' :
+      xor (gc (ofNat (k := k) i)) (gc (ofNat (k := k) i.succ)) = oneHotFin ⟨0, hk⟩ := by
+    simpa [hIdx] using hAdj
+
+  have hSolve :=
+    congrArg (fun t => xor t (gc (ofNat (k := k) i.succ))) hAdj'
+  have hLeft :
+      xor (xor (gc (ofNat (k := k) i)) (gc (ofNat (k := k) i.succ))) (gc (ofNat (k := k) i.succ))
+        =
+      gc (ofNat (k := k) i) := by
+    simpa using (BV.xor_invol_right (x := gc (ofNat (k := k) i)) (e := gc (ofNat (k := k) i.succ)))
+
+  have hgc2 : gc (ofNat (k := k) i.succ) = oneHotFin ⟨k - 1, sub_one_lt_of_pos hk⟩ := by
+    have hk2 : 2 ≤ 2 ^ k := two_pow_ge_two (k := k) hk
+    have h1lt : 1 < 2 ^ k := Nat.lt_of_lt_of_le (by decide : 1 < 2) hk2
+    have hiSucc : i.succ = 2 ^ k - 1 := by
+      -- `(a-2)+1 = a-1` for `a ≥ 2`.
+      set a : Nat := 2 ^ k
+      have ha : 2 ≤ a := by simpa [a] using hk2
+      have ha1pos : 0 < a - 1 := Nat.sub_pos_of_lt (Nat.lt_of_lt_of_le (by decide : 1 < 2) ha)
+      have ha1 : 1 ≤ a - 1 := Nat.succ_le_of_lt ha1pos
+      have hsub : a - 1 - 1 = a - 2 := by
+        have := (Nat.sub_add_eq a 1 1).symm
+        simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using this
+      calc
+        i.succ = (a - 2).succ := by simp [i, a]
+        _ = (a - 2) + 1 := by simp [Nat.succ_eq_add_one]
+        _ = (a - 1 - 1) + 1 := by simp [hsub]
+        _ = a - 1 := Nat.sub_add_cancel ha1
+        _ = 2 ^ k - 1 := by simp [a]
+    -- Apply the `gc`-of-all-ones lemma.
+    simpa [hiSucc.symm] using gc_ofNat_two_pow_sub_one_eq_oneHotFin_last (k := k) hk
+
+  -- Solve for `gc(ofNat i)` using XOR involution.
+  have hx : gc (ofNat (k := k) i) = xor (oneHotFin ⟨0, hk⟩) (gc (ofNat (k := k) i.succ)) :=
+    hLeft.symm.trans hSolve
+  -- Substitute the computed `gc(ofNat i.succ)`.
+  simpa [i, hgc2, xor_comm] using hx
+
+theorem childEntry_two_pow_sub_one_eq_xor_oneHotFin_zero_last {k : Nat} (hk : 0 < k) :
+    childEntry k (2 ^ k - 1)
+      =
+    xor (oneHotFin ⟨0, hk⟩) (oneHotFin ⟨k - 1, sub_one_lt_of_pos hk⟩) := by
+  -- `2^k - 1 ≠ 0` for `k > 0`.
+  have hk2 : 2 ≤ 2 ^ k := two_pow_ge_two (k := k) hk
+  have h1lt : 1 < 2 ^ k := Nat.lt_of_lt_of_le (by decide : 1 < 2) hk2
+  have hne : (2 ^ k - 1) ≠ 0 := Nat.ne_of_gt (Nat.sub_pos_of_lt h1lt)
+
+  -- The even predecessor `2^k - 2` is divisible by `2`, so `2 * ((2^k - 2)/2) = 2^k - 2`.
+  have hpow : 2 ∣ 2 ^ k := by
+    cases k with
+    | zero =>
+        cases (Nat.not_lt_zero 0 hk)
+    | succ k' =>
+        refine ⟨2 ^ k', ?_⟩
+        simp [Nat.pow_succ, Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc]
+  have h2 : 2 ∣ 2 := ⟨1, by simp⟩
+  have hdvd : 2 ∣ 2 ^ k - 2 := Nat.dvd_sub hpow h2
+  have hsub : (2 ^ k - 1) - 1 = 2 ^ k - 2 := by
+    -- `(a-1)-1 = a-2`
+    have := (Nat.sub_add_eq (2 ^ k) 1 1).symm
+    simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using this
+  have hj : 2 * (((2 ^ k - 1) - 1) / 2) = 2 ^ k - 2 := by
+    -- rewrite the inner subtraction and cancel the division (evenness)
+    simpa [hsub] using (Nat.mul_div_cancel' hdvd)
+
+  -- Unfold `childEntry` and reduce to the computed Gray code for `2^k - 2`.
+  simp [childEntry, hne, hj, gc_ofNat_two_pow_sub_two_eq_xor_oneHotFin_zero_last (k := k) hk]
+
+end BV
+
+namespace State
+
+open BV
+
+/-!
+If the current digit is maximal (`w = 2^k - 1`), then descending into that child preserves the
+exit-corner label `f = e ⊕ 2^d`.
+
+This is the key invariant used to show that an all-max suffix of digits decodes to an exit corner.
+-/
+theorem exitCorner_stateUpdate_toNat_two_pow_sub_one
+    {n : Nat} {A : List (Axis n)} (st : State n A) (w : BV A.length)
+    (hw : BV.toNat w = 2 ^ A.length - 1) :
+    exitCorner (stateUpdate A st w) = exitCorner st := by
+  classical
+  have hk : 0 < A.length := State.length_pos st
+  let r : Nat := st.dPos.val + 1
+  let dPosNext : Fin A.length := ⟨(st.dPos.val + 1) % A.length, Nat.mod_lt _ hk⟩
+
+  have hEntry :
+      childEntry A.length (2 ^ A.length - 1)
+        =
+      xor (oneHotFin ⟨0, hk⟩) (oneHotFin ⟨A.length - 1, BV.sub_one_lt_of_pos hk⟩) := by
+    simpa using BV.childEntry_two_pow_sub_one_eq_xor_oneHotFin_zero_last (k := A.length) hk
+
+  have hDir : childDir A.length (2 ^ A.length - 1) = 0 := by
+    simpa using (BV.childDir_two_pow_sub_one (k := A.length) hk)
+
+  have hRot0 :
+      rotL (k := A.length) r (oneHotFin ⟨0, hk⟩) = oneHotFin dPosNext := by
+    have h :=
+      BV.rotL_oneHotFin_eq_of_pos (k := A.length) hk r ⟨0, hk⟩
+    have hIdx : (⟨(0 + r) % A.length, Nat.mod_lt _ hk⟩ : Fin A.length) = dPosNext := by
+      apply Fin.ext
+      simp [dPosNext, r, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
+    simpa [hIdx] using h
+
+  have hRotLast :
+      rotL (k := A.length) r (oneHotFin ⟨A.length - 1, BV.sub_one_lt_of_pos hk⟩) =
+        oneHotFin st.dPos := by
+    have h :=
+      BV.rotL_oneHotFin_eq_of_pos (k := A.length) hk r ⟨A.length - 1, BV.sub_one_lt_of_pos hk⟩
+    have hk1 : 1 ≤ A.length := Nat.succ_le_of_lt hk
+    have hLastVal : ((A.length - 1) + r) % A.length = st.dPos.val := by
+      calc
+        ((A.length - 1) + r) % A.length
+            = ((A.length - 1) + (st.dPos.val + 1)) % A.length := by
+                simp [r]
+        _ = (((A.length - 1) + 1) + st.dPos.val) % A.length := by
+              have h' : (A.length - 1) + (st.dPos.val + 1) = ((A.length - 1) + 1) + st.dPos.val := by
+                ac_rfl
+              simpa [h']
+        _ = (A.length + st.dPos.val) % A.length := by
+              simp [Nat.sub_add_cancel hk1]
+        _ = st.dPos.val % A.length := by
+              simp [Nat.add_mod]
+        _ = st.dPos.val := Nat.mod_eq_of_lt st.dPos.isLt
+    have hIdx :
+        (⟨((A.length - 1) + r) % A.length, Nat.mod_lt _ hk⟩ : Fin A.length) = st.dPos := by
+      apply Fin.ext
+      exact hLastVal
+    simpa [hIdx] using h
+
+  have hRotEntry :
+      rotL (k := A.length) r (childEntry A.length (2 ^ A.length - 1))
+        =
+      xor (oneHotFin dPosNext) (oneHotFin st.dPos) := by
+    calc
+      rotL (k := A.length) r (childEntry A.length (2 ^ A.length - 1))
+          =
+        rotL (k := A.length) r
+          (xor (oneHotFin ⟨0, hk⟩) (oneHotFin ⟨A.length - 1, BV.sub_one_lt_of_pos hk⟩)) := by
+            simp [hEntry]
+      _ =
+        xor (rotL (k := A.length) r (oneHotFin ⟨0, hk⟩))
+            (rotL (k := A.length) r (oneHotFin ⟨A.length - 1, BV.sub_one_lt_of_pos hk⟩)) := by
+            simpa using
+              (BV.xor_rotL (k := A.length) r (oneHotFin ⟨0, hk⟩)
+                    (oneHotFin ⟨A.length - 1, BV.sub_one_lt_of_pos hk⟩)).symm
+      _ = xor (oneHotFin dPosNext) (oneHotFin st.dPos) := by
+            simp [hRot0, hRotLast]
+
+  have hExit :
+      exitCorner (stateUpdate A st w)
+        =
+      xor (xor st.e (xor (oneHotFin dPosNext) (oneHotFin st.dPos))) (oneHotFin dPosNext) := by
+    -- Unfold `stateUpdate`, rewrite the max-digit hypotheses, and use the computed rotated entry.
+    simp [State.exitCorner, stateUpdate, State.mk', hw, hDir, hRotEntry, r, dPosNext]
+
+  -- Cancel the duplicated `2^(d+1)` term in `e' ⊕ 2^{d'}` to recover `e ⊕ 2^d`.
+  have hCancel :
+      xor (xor st.e (xor (oneHotFin dPosNext) (oneHotFin st.dPos))) (oneHotFin dPosNext)
+        =
+      xor st.e (oneHotFin st.dPos) := by
+    -- `((e ⊕ a ⊕ b) ⊕ a) = e ⊕ b` by commutativity/associativity and involution.
+    let a : BV A.length := oneHotFin dPosNext
+    let b : BV A.length := oneHotFin st.dPos
+    simpa [a, b] using (calc
+      xor (xor st.e (xor a b)) a
+          = xor (xor (xor st.e a) b) a := by
+              rw [(BV.xor_assoc st.e a b).symm]
+      _ = xor (xor st.e a) (xor b a) := by
+              simpa using BV.xor_assoc (x := xor st.e a) (y := b) (z := a)
+      _ = xor (xor st.e a) (xor a b) := by
+              rw [BV.xor_comm b a]
+      _ = xor (xor (xor st.e a) a) b := by
+              simpa using (BV.xor_assoc (x := xor st.e a) (y := a) (z := b)).symm
+      _ = xor st.e b := by
+              rw [BV.xor_invol_right (x := st.e) (e := a)]
+      )
+
+  calc
+    exitCorner (stateUpdate A st w)
+        =
+      xor (xor st.e (xor (oneHotFin dPosNext) (oneHotFin st.dPos))) (oneHotFin dPosNext) := hExit
+    _ = xor st.e (oneHotFin st.dPos) := hCancel
+    _ = exitCorner st := rfl
+
+end State
+
+end AnisoHilbert
