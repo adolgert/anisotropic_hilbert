@@ -15,6 +15,7 @@ import AnisoHilbert.MutualInverses
 import AnisoHilbert.PlaneReadWriteLemmas
 import AnisoHilbert.DecodeHigherPlaneLemmas
 import AnisoHilbert.EncodeAfterDecode
+import AnisoHilbert.ExitCornerLemmas
 import AnisoHilbert.EncodeTotal
 import AnisoHilbert.MutualInversesTotal
 import AnisoHilbert.DiscreteProof

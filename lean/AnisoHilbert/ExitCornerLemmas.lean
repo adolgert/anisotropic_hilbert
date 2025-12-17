@@ -2,6 +2,8 @@ import Mathlib
 
 import AnisoHilbert.AdjacencyLemmas
 import AnisoHilbert.BVNatLemmas
+import AnisoHilbert.DecodeHeadPlaneLemmas
+import AnisoHilbert.EmbedLemmas
 import AnisoHilbert.Loops
 import AnisoHilbert.RotLOneHotLemmas
 
@@ -10,6 +12,10 @@ namespace AnisoHilbert
 namespace State
 
 open BV
+
+/-- Entry corner label (Hamilton's `e`) for a Hilbert state. -/
+def entryCorner {n : Nat} {A : List (Axis n)} (st : State n A) : BV A.length :=
+  st.e
 
 /-- Exit corner label `f = e ⊕ 2^d` (in one-hot form) for a Hilbert state. -/
 def exitCorner {n : Nat} {A : List (Axis n)} (st : State n A) : BV A.length :=
@@ -28,6 +34,25 @@ theorem xor_assoc {k : Nat} (x y z : BV k) : xor (xor x y) z = xor x (xor y z) :
 theorem xor_comm {k : Nat} (x y : BV k) : xor x y = xor y x := by
   funext i
   cases hx : x i <;> cases hy : y i <;> simp [xor, bxor, hx, hy]
+
+theorem rotL_zero {k : Nat} (r : Nat) : BV.rotL (k := k) r BV.zero = BV.zero := by
+  cases k with
+  | zero => rfl
+  | succ k' =>
+      funext i
+      simp [BV.rotL, BV.zero]
+
+theorem xor_zero_left {k : Nat} (x : BV k) : BV.xor BV.zero x = x := by
+  funext i
+  cases hx : x i <;> simp [BV.xor, BV.bxor, hx, BV.zero]
+
+theorem xor_zero_right {k : Nat} (x : BV k) : BV.xor x BV.zero = x := by
+  funext i
+  cases hx : x i <;> simp [BV.xor, BV.bxor, hx, BV.zero]
+
+theorem gc_zero {k : Nat} : BV.gc (k := k) BV.zero = BV.zero := by
+  funext i
+  simp [BV.gc, BV.shr1, BV.zero, BV.xor, BV.bxor, getBit]
 
 theorem sub_one_lt_of_pos {k : Nat} (hk : 0 < k) : k - 1 < k :=
   Nat.sub_lt_of_pos_le (by decide : 0 < 1) (Nat.succ_le_of_lt hk)
@@ -284,6 +309,13 @@ namespace State
 
 open BV
 
+theorem entryCorner_stateUpdate_toNat_zero
+    {n : Nat} {A : List (Axis n)} (st : State n A) (w : BV A.length)
+    (hw : BV.toNat w = 0) :
+    entryCorner (stateUpdate A st w) = entryCorner st := by
+  -- `w = 0` implies `childEntry … w = 0`, so the entry mask is unchanged.
+  simp [entryCorner, stateUpdate, hw, childEntry, BV.rotL_zero, BV.xor_zero_right, State.mk']
+
 /-!
 If the current digit is maximal (`w = 2^k - 1`), then descending into that child preserves the
 exit-corner label `f = e ⊕ 2^d`.
@@ -398,6 +430,301 @@ theorem exitCorner_stateUpdate_toNat_two_pow_sub_one
     _ = xor st.e (oneHotFin st.dPos) := hCancel
     _ = exitCorner st := rfl
 
+  /-!
+  The exit corner also shows up directly in decoding: the plane word written for a maximal digit
+  is exactly `exitCorner`.
+  -/
+
+theorem Tinv_gc_toNat_zero_eq_entryCorner
+    {n : Nat} {A : List (Axis n)} (st : State n A) (w : BV A.length)
+    (hw : BV.toNat w = 0) :
+    Tinv st.e st.dPos.val (BV.gc w) = entryCorner st := by
+  have hwOf : BV.ofNat (k := A.length) 0 = w := by
+    simpa [hw] using (BV.ofNat_toNat (x := w))
+  have hOfNat0 : BV.ofNat (k := A.length) 0 = (BV.zero (k := A.length)) := by
+    funext i
+    simp [BV.ofNat, BV.zero]
+  have hw0 : w = (BV.zero (k := A.length)) := by
+    calc
+      w = BV.ofNat (k := A.length) 0 := hwOf.symm
+      _ = BV.zero := hOfNat0
+
+  have hgc : BV.gc w = BV.zero := by
+    simpa [hw0] using (BV.gc_zero (k := A.length))
+
+  have hRot : BV.rotL (k := A.length) (st.dPos.val.succ) (BV.zero) = BV.zero :=
+    BV.rotL_zero (k := A.length) (r := st.dPos.val.succ)
+
+  calc
+    Tinv st.e st.dPos.val (BV.gc w)
+        = BV.xor (BV.rotL (st.dPos.val.succ) (BV.gc w)) st.e := by
+            simp [Tinv]
+    _ = BV.xor (BV.rotL (st.dPos.val.succ) BV.zero) st.e := by
+          simp [hgc]
+    _ = BV.xor (BV.zero (k := A.length)) st.e := by
+          simp [hRot]
+    _ = st.e := by
+          simpa using (BV.xor_zero_left (k := A.length) st.e)
+    _ = entryCorner st := rfl
+
+theorem Tinv_gc_toNat_two_pow_sub_one_eq_exitCorner
+    {n : Nat} {A : List (Axis n)} (st : State n A) (w : BV A.length)
+    (hw : BV.toNat w = 2 ^ A.length - 1) :
+    Tinv st.e st.dPos.val (BV.gc w) = exitCorner st := by
+  classical
+  have hk : 0 < A.length := State.length_pos st
+
+  have hwOf : BV.ofNat (k := A.length) (2 ^ A.length - 1) = w := by
+    -- Rewrite `toNat w` to the maximal value and use `ofNat_toNat`.
+    simpa [hw] using (BV.ofNat_toNat (x := w))
+
+  have hgc : BV.gc w = BV.oneHotFin ⟨A.length - 1, BV.sub_one_lt_of_pos hk⟩ := by
+    -- `gc(2^k - 1)` is the last one-hot bit.
+    simpa [hwOf] using
+      BV.gc_ofNat_two_pow_sub_one_eq_oneHotFin_last (k := A.length) hk
+
+  have hk1 : 1 ≤ A.length := Nat.succ_le_of_lt hk
+  have hRot :
+      BV.rotL (k := A.length) (st.dPos.val + 1)
+          (BV.oneHotFin ⟨A.length - 1, BV.sub_one_lt_of_pos hk⟩)
+        =
+        BV.oneHotFin st.dPos := by
+    have h :=
+      BV.rotL_oneHotFin_eq_of_pos (k := A.length) hk (st.dPos.val + 1)
+        ⟨A.length - 1, BV.sub_one_lt_of_pos hk⟩
+    have hLastVal : ((A.length - 1) + (st.dPos.val + 1)) % A.length = st.dPos.val := by
+      have hkm : (A.length + st.dPos.val) % A.length = st.dPos.val := by
+        calc
+          (A.length + st.dPos.val) % A.length
+              = ((A.length % A.length) + (st.dPos.val % A.length)) % A.length := by
+                  simpa using (Nat.add_mod A.length st.dPos.val A.length)
+          _ = st.dPos.val % A.length := by simp
+          _ = st.dPos.val := Nat.mod_eq_of_lt st.dPos.isLt
+      calc
+        ((A.length - 1) + (st.dPos.val + 1)) % A.length
+            = (((A.length - 1) + 1) + st.dPos.val) % A.length := by
+                ac_rfl
+        _ = (A.length + st.dPos.val) % A.length := by
+              simp [Nat.sub_add_cancel hk1]
+        _ = st.dPos.val := hkm
+    have hIdx :
+        (⟨((A.length - 1) + (st.dPos.val + 1)) % A.length, Nat.mod_lt _ hk⟩ : Fin A.length) =
+          st.dPos := by
+      apply Fin.ext
+      exact hLastVal
+    simpa [hIdx] using h
+
+  calc
+    Tinv st.e st.dPos.val (BV.gc w)
+        =
+      BV.xor (BV.rotL (st.dPos.val.succ) (BV.gc w)) st.e := by
+        simp [Tinv]
+    _ =
+        BV.xor (BV.rotL (st.dPos.val + 1) (BV.oneHotFin ⟨A.length - 1, BV.sub_one_lt_of_pos hk⟩))
+          st.e := by
+        simp [hgc, Nat.succ_eq_add_one]
+    _ = BV.xor (BV.oneHotFin st.dPos) st.e := by
+        simp [hRot, Nat.succ_eq_add_one]
+    _ = BV.xor st.e (BV.oneHotFin st.dPos) := by
+        simpa using (BV.xor_comm (x := BV.oneHotFin st.dPos) (y := st.e))
+    _ = exitCorner st := rfl
+
 end State
+
+namespace Embed
+
+open BV
+
+theorem embedBV_xor {n : Nat} (Aold Anew : List (Axis n)) (x y : BV Aold.length) :
+    embedBV Aold Anew (BV.xor x y) = BV.xor (embedBV Aold Anew x) (embedBV Aold Anew y) := by
+  funext j
+  cases h : pos? Aold (Anew.get j) with
+  | none =>
+      have hxy :
+          embedBV Aold Anew (BV.xor x y) j = false :=
+        embedBV_of_pos?_none (Aold := Aold) (Anew := Anew) (x := BV.xor x y) (j := j) h
+      have hx : embedBV Aold Anew x j = false :=
+        embedBV_of_pos?_none (Aold := Aold) (Anew := Anew) (x := x) (j := j) h
+      have hy : embedBV Aold Anew y j = false :=
+        embedBV_of_pos?_none (Aold := Aold) (Anew := Anew) (x := y) (j := j) h
+      simp [BV.xor, BV.bxor, hxy, hx, hy]
+  | some i =>
+      have hxy :
+          embedBV Aold Anew (BV.xor x y) j = (BV.xor x y) i :=
+        embedBV_of_pos?_some (Aold := Aold) (Anew := Anew) (x := BV.xor x y) (j := j) (i := i) h
+      have hx : embedBV Aold Anew x j = x i :=
+        embedBV_of_pos?_some (Aold := Aold) (Anew := Anew) (x := x) (j := j) (i := i) h
+      have hy : embedBV Aold Anew y j = y i :=
+        embedBV_of_pos?_some (Aold := Aold) (Anew := Anew) (x := y) (j := j) (i := i) h
+      simp [BV.xor, BV.bxor, hxy, hx, hy]
+
+private theorem get_ne_of_pos?_some_of_nodup {n : Nat} {A : List (Axis n)}
+    (hA : A.Nodup) {a : Axis n} {i : Fin A.length}
+    (hpos : pos? A a = some i) (j : Fin A.length) (hj : j ≠ i) :
+    A.get j ≠ a := by
+  intro hEq
+  have hposj : pos? A (A.get j) = some j := Pos.pos?_get_of_nodup (xs := A) hA j
+  have hposArg : pos? A (A.get j) = pos? A a := congrArg (fun x => pos? A x) hEq
+  have hpos' : pos? A a = some j := by
+    calc
+      pos? A a = pos? A (A.get j) := by simpa using hposArg.symm
+      _ = some j := hposj
+  have : (some i : Option (Fin A.length)) = some j := by
+    simpa [hpos] using hpos'
+  exact hj (Option.some.inj this).symm
+
+/-- `entryCorner` commutes with activation embedding. -/
+theorem embedState?_entryCorner_eq
+    {n : Nat} (Aold Anew : List (Axis n))
+    (st : State n Aold) {st' : State n Anew}
+    (h : embedState? (Aold := Aold) (Anew := Anew) st = some st') :
+    State.entryCorner st' = embedBV Aold Anew (State.entryCorner st) := by
+  unfold embedState? at h
+  cases hpos : pos? Anew st.dirAxis with
+  | none =>
+      simp [hpos] at h
+  | some dPos' =>
+      have hMk :
+          State.mk' (A := Anew) (e := embedBV Aold Anew st.e) (dPos := dPos') = st' :=
+        Option.some.inj (by simpa [hpos] using h)
+      have hE : st'.e = embedBV Aold Anew st.e := by
+        simpa [State.mk'] using (congrArg State.e hMk).symm
+      simpa [State.entryCorner] using hE
+
+/-- `exitCorner` commutes with activation embedding (on nodup axis lists). -/
+theorem embedState?_exitCorner_eq
+    {n : Nat} (Aold Anew : List (Axis n))
+    (hOld : Aold.Nodup) (hNew : Anew.Nodup)
+    (st : State n Aold) {st' : State n Anew}
+    (h : embedState? (Aold := Aold) (Anew := Anew) st = some st') :
+    State.exitCorner st' = embedBV Aold Anew (State.exitCorner st) := by
+  classical
+  unfold embedState? at h
+  cases hpos : pos? Anew st.dirAxis with
+  | none =>
+      simp [hpos] at h
+  | some dPos' =>
+      have hMk :
+          State.mk' (A := Anew) (e := embedBV Aold Anew st.e) (dPos := dPos') = st' :=
+        Option.some.inj (by simpa [hpos] using h)
+
+      have hE : st'.e = embedBV Aold Anew st.e := by
+        simpa [State.mk'] using (congrArg State.e hMk).symm
+
+      have hD : st'.dPos = dPos' := by
+        simpa [State.mk'] using (congrArg State.dPos hMk).symm
+
+      have hposOld : pos? Aold st.dirAxis = some st.dPos := by
+        -- `pos?` finds the index of a `get` element in a nodup list.
+        have hpos0 : pos? Aold (Aold.get st.dPos) = some st.dPos :=
+          Pos.pos?_get_of_nodup (xs := Aold) hOld st.dPos
+        have hposArg : pos? Aold (Aold.get st.dPos) = pos? Aold st.dirAxis :=
+          congrArg (fun x => pos? Aold x) st.dir_ok
+        exact (by
+          calc
+            pos? Aold st.dirAxis = pos? Aold (Aold.get st.dPos) := by simpa using hposArg.symm
+            _ = some st.dPos := hpos0)
+
+      have hDir : Anew.get dPos' = st.dirAxis :=
+        Pos.get_of_pos?_some (xs := Anew) (a := st.dirAxis) (i := dPos') hpos
+
+      have hone :
+          embedBV Aold Anew (oneHotFin st.dPos) = oneHotFin dPos' := by
+        funext j
+        by_cases hj : j = dPos'
+        ·
+          have hposAt : pos? Aold (Anew.get dPos') = some st.dPos := by
+            have hposArg : pos? Aold (Anew.get dPos') = pos? Aold st.dirAxis :=
+              congrArg (fun x => pos? Aold x) hDir
+            calc
+              pos? Aold (Anew.get dPos') = pos? Aold st.dirAxis := by simpa using hposArg
+              _ = some st.dPos := hposOld
+          cases hj
+          -- Embed the old one-hot along the (preserved) direction axis.
+          rw [Embed.embedBV_of_pos?_some (Aold := Aold) (Anew := Anew) (x := oneHotFin st.dPos)
+            (j := dPos') (i := st.dPos) hposAt]
+          simp [oneHotFin]
+        ·
+          have hR : oneHotFin dPos' j = false := by
+            simp [oneHotFin, hj]
+          have hAxNe : Anew.get j ≠ st.dirAxis :=
+            get_ne_of_pos?_some_of_nodup (A := Anew) hNew (a := st.dirAxis) (i := dPos') hpos j hj
+          cases hposj : pos? Aold (Anew.get j) with
+          | none =>
+              rw [Embed.embedBV_of_pos?_none (Aold := Aold) (Anew := Anew) (x := oneHotFin st.dPos)
+                (j := j) hposj, hR]
+          | some i =>
+              have hiNe : i ≠ st.dPos := by
+                intro hiEq
+                have hposSd : pos? Aold (Anew.get j) = some st.dPos := by
+                  simpa [hiEq] using hposj
+                have hget :
+                    Aold.get st.dPos = Anew.get j :=
+                  Pos.get_of_pos?_some (xs := Aold) (a := Anew.get j) (i := st.dPos) hposSd
+                have : Anew.get j = st.dirAxis := by
+                  calc
+                    Anew.get j = Aold.get st.dPos := by simpa using hget.symm
+                    _ = st.dirAxis := st.dir_ok
+                exact hAxNe this
+              rw [Embed.embedBV_of_pos?_some (Aold := Aold) (Anew := Anew) (x := oneHotFin st.dPos)
+                (j := j) (i := i) hposj]
+              rw [hR]
+              simp [oneHotFin, hiNe]
+
+      calc
+        State.exitCorner st'
+            =
+          BV.xor (embedBV Aold Anew st.e) (oneHotFin dPos') := by
+            simp [State.exitCorner, hE, hD]
+        _ =
+          BV.xor (embedBV Aold Anew st.e) (embedBV Aold Anew (oneHotFin st.dPos)) := by
+            rw [← hone]
+        _ =
+          embedBV Aold Anew (BV.xor st.e (oneHotFin st.dPos)) := by
+            simpa using (embedBV_xor (Aold := Aold) (Anew := Anew) (x := st.e) (y := oneHotFin st.dPos)).symm
+        _ = embedBV Aold Anew (State.exitCorner st) := rfl
+
+end Embed
+
+namespace DecodeHead
+
+open BV
+
+theorem packPlane_decodeFromLevel_head_toNat_zero_eq_entryCorner
+    {n : Nat} {m : Exponents n}
+    (s : Nat)
+    (st : State n (activeAxes m (Nat.succ s)))
+    (w : BV (activeAxes m (Nat.succ s)).length)
+    (rest : Digits)
+    (pAcc pOut : PointBV m)
+    (hDec :
+      decodeFromLevel (m := m) (Nat.succ s) st
+        (⟨(activeAxes m (Nat.succ s)).length, w⟩ :: rest) pAcc = some pOut)
+    (hw : BV.toNat w = 0) :
+    packPlane (activeAxes m (Nat.succ s)) pOut s = State.entryCorner st := by
+  have hPlane :=
+    DecodeHead.packPlane_decodeFromLevel_head (m := m)
+      (s := s) (st := st) (w := w) (rest := rest) (pAcc := pAcc) (pOut := pOut) hDec
+  simpa [State.Tinv_gc_toNat_zero_eq_entryCorner (st := st) (w := w) (hw := hw)] using hPlane
+
+theorem packPlane_decodeFromLevel_head_toNat_two_pow_sub_one_eq_exitCorner
+    {n : Nat} {m : Exponents n}
+    (s : Nat)
+    (st : State n (activeAxes m (Nat.succ s)))
+    (w : BV (activeAxes m (Nat.succ s)).length)
+    (rest : Digits)
+    (pAcc pOut : PointBV m)
+    (hDec :
+      decodeFromLevel (m := m) (Nat.succ s) st
+        (⟨(activeAxes m (Nat.succ s)).length, w⟩ :: rest) pAcc = some pOut)
+    (hw : BV.toNat w = 2 ^ (activeAxes m (Nat.succ s)).length - 1) :
+    packPlane (activeAxes m (Nat.succ s)) pOut s = State.exitCorner st := by
+  have hPlane :=
+    DecodeHead.packPlane_decodeFromLevel_head (m := m)
+      (s := s) (st := st) (w := w) (rest := rest) (pAcc := pAcc) (pOut := pOut) hDec
+  -- Rewrite the reconstructed word for the maximal digit.
+  simpa [State.Tinv_gc_toNat_two_pow_sub_one_eq_exitCorner (st := st) (w := w) (hw := hw)] using hPlane
+
+end DecodeHead
 
 end AnisoHilbert
