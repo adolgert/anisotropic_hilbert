@@ -727,4 +727,408 @@ theorem packPlane_decodeFromLevel_head_toNat_two_pow_sub_one_eq_exitCorner
 
 end DecodeHead
 
+namespace Digits
+
+/-- A digit suffix for `decodeFromLevel` where every remaining word is `0`. -/
+def allZeroForDecode {n : Nat} (m : Exponents n) : Nat → Digits → Prop
+  | 0, ds => ds = []
+  | Nat.succ s, ds =>
+      ∃ (w : BV (activeAxes m (Nat.succ s)).length) (rest : Digits),
+        ds = ⟨(activeAxes m (Nat.succ s)).length, w⟩ :: rest ∧
+          BV.toNat w = 0 ∧
+          allZeroForDecode m s rest
+
+/-- A digit suffix for `decodeFromLevel` where every remaining word is maximal (`2^k - 1`). -/
+def allMaxForDecode {n : Nat} (m : Exponents n) : Nat → Digits → Prop
+  | 0, ds => ds = []
+  | Nat.succ s, ds =>
+      ∃ (w : BV (activeAxes m (Nat.succ s)).length) (rest : Digits),
+        ds = ⟨(activeAxes m (Nat.succ s)).length, w⟩ :: rest ∧
+          BV.toNat w = 2 ^ (activeAxes m (Nat.succ s)).length - 1 ∧
+          allMaxForDecode m s rest
+
+theorem allZeroForDecode_of_decodeFromLevel_toNat_eq_zero
+    {n : Nat} {m : Exponents n} :
+    ∀ (s : Nat) (st : State n (activeAxes m s)) (ds : Digits)
+      (pAcc pOut : PointBV m),
+      decodeFromLevel (m := m) s st ds pAcc = some pOut →
+      (∀ d ∈ ds, BV.toNat d.2 = 0) →
+      allZeroForDecode m s ds := by
+  intro s
+  induction s with
+  | zero =>
+      intro st ds pAcc pOut hDec hZero
+      cases ds with
+      | nil =>
+          simpa [allZeroForDecode] using rfl
+      | cons d rest =>
+          simp [decodeFromLevel] at hDec
+  | succ s ih =>
+      intro st ds pAcc pOut hDec hZero
+      cases ds with
+      | nil =>
+          simp [decodeFromLevel] at hDec
+      | cons d rest =>
+          rcases d with ⟨kW, w⟩
+          let A : List (Axis n) := activeAxes m (Nat.succ s)
+          by_cases hk : kW = A.length
+          · cases hk
+            have hHead : BV.toNat w = 0 := hZero ⟨A.length, w⟩ (by simp)
+            have hRest : ∀ d ∈ rest, BV.toNat d.2 = 0 := by
+              intro d hd
+              exact hZero d (by simp [hd])
+            cases s with
+            | zero =>
+                -- Last level: decoding succeeds only if there are no remaining digits.
+                cases rest with
+                | nil =>
+                    refine ⟨w, [], ?_, hHead, ?_⟩
+                    · rfl
+                    · simp [allZeroForDecode]
+                | cons d2 rest2 =>
+                    simp [decodeFromLevel, A] at hDec
+            | succ s' =>
+                -- Recursive case: extract the recursive decode equality and apply IH to `rest`.
+                let l : BV A.length := Tinv st.e st.dPos.val (BV.gc w)
+                let p1 : PointBV m := writePlane A l pAcc (Nat.succ s')
+                let stNext : State n A := stateUpdate (A := A) st w
+                have hDec' :
+                    decodeFromLevel (m := m) (Nat.succ (Nat.succ s')) st (⟨A.length, w⟩ :: rest) pAcc =
+                      some pOut := by
+                  simpa [A] using hDec
+                simp [decodeFromLevel, A, l, p1, stNext] at hDec'
+                split at hDec'
+                · exact Option.noConfusion hDec'
+                · rename_i stRec hEmb
+                  have hRec :
+                      decodeFromLevel (m := m) (Nat.succ s') stRec rest p1 = some pOut := hDec'
+                  have hAllZeroRest :=
+                    ih (st := stRec) (ds := rest) (pAcc := p1) (pOut := pOut) hRec hRest
+                  refine ⟨w, rest, ?_, hHead, hAllZeroRest⟩
+                  rfl
+          · simp [decodeFromLevel, A, hk] at hDec
+
+theorem allMaxForDecode_of_decodeFromLevel_toNat_eq_two_pow_sub_one
+    {n : Nat} {m : Exponents n} :
+    ∀ (s : Nat) (st : State n (activeAxes m s)) (ds : Digits)
+      (pAcc pOut : PointBV m),
+      decodeFromLevel (m := m) s st ds pAcc = some pOut →
+      (∀ d ∈ ds, BV.toNat d.2 = 2 ^ d.1 - 1) →
+      allMaxForDecode m s ds := by
+  intro s
+  induction s with
+  | zero =>
+      intro st ds pAcc pOut hDec hMax
+      cases ds with
+      | nil =>
+          simpa [allMaxForDecode] using rfl
+      | cons d rest =>
+          simp [decodeFromLevel] at hDec
+  | succ s ih =>
+      intro st ds pAcc pOut hDec hMax
+      cases ds with
+      | nil =>
+          simp [decodeFromLevel] at hDec
+      | cons d rest =>
+          rcases d with ⟨kW, w⟩
+          let A : List (Axis n) := activeAxes m (Nat.succ s)
+          by_cases hk : kW = A.length
+          · cases hk
+            have hHead : BV.toNat w = 2 ^ A.length - 1 := hMax ⟨A.length, w⟩ (by simp)
+            have hRest : ∀ d ∈ rest, BV.toNat d.2 = 2 ^ d.1 - 1 := by
+              intro d hd
+              exact hMax d (by simp [hd])
+            cases s with
+            | zero =>
+                cases rest with
+                | nil =>
+                    refine ⟨w, [], ?_, ?_, ?_⟩
+                    · rfl
+                    · simpa using hHead
+                    · simp [allMaxForDecode]
+                | cons d2 rest2 =>
+                    simp [decodeFromLevel, A] at hDec
+            | succ s' =>
+                let l : BV A.length := Tinv st.e st.dPos.val (BV.gc w)
+                let p1 : PointBV m := writePlane A l pAcc (Nat.succ s')
+                let stNext : State n A := stateUpdate (A := A) st w
+                have hDec' :
+                    decodeFromLevel (m := m) (Nat.succ (Nat.succ s')) st (⟨A.length, w⟩ :: rest) pAcc =
+                      some pOut := by
+                  simpa [A] using hDec
+                simp [decodeFromLevel, A, l, p1, stNext] at hDec'
+                split at hDec'
+                · exact Option.noConfusion hDec'
+                · rename_i stRec hEmb
+                  have hRec :
+                      decodeFromLevel (m := m) (Nat.succ s') stRec rest p1 = some pOut := hDec'
+                  have hAllMaxRest :=
+                    ih (st := stRec) (ds := rest) (pAcc := p1) (pOut := pOut) hRec hRest
+                  refine ⟨w, rest, ?_, ?_, hAllMaxRest⟩
+                  · rfl
+                  · simpa using hHead
+          · simp [decodeFromLevel, A, hk] at hDec
+
+end Digits
+
+namespace DecodeSuffix
+
+open BV
+
+private theorem unpackPlane_embedBV_eq_of_mem {n : Nat}
+    (Aold Anew : List (Axis n)) (x : BV Aold.length) (j : Axis n)
+    (hjOld : j ∈ Aold) (hjNew : j ∈ Anew) :
+    unpackPlane Anew (Embed.embedBV Aold Anew x) j = unpackPlane Aold x j := by
+  classical
+  rcases Pos.pos?_some_of_mem (xs := Aold) (a := j) hjOld with ⟨iOld, hiOld⟩
+  rcases Pos.pos?_some_of_mem (xs := Anew) (a := j) hjNew with ⟨iNew, hiNew⟩
+  have hgetNew : Anew.get iNew = j := Pos.get_of_pos?_some (xs := Anew) (a := j) (i := iNew) hiNew
+  have hLeft : unpackPlane Anew (Embed.embedBV Aold Anew x) j = x iOld := by
+    -- `unpackPlane` selects the corresponding embedded bit at position `iNew`.
+    simp [unpackPlane, hiNew]
+    have hpos : pos? Aold (Anew.get iNew) = some iOld := by
+      calc
+        pos? Aold (Anew.get iNew) = pos? Aold j := by
+          simpa using congrArg (fun a => pos? Aold a) hgetNew
+        _ = some iOld := hiOld
+    -- Evaluate the embedded bit using the `pos?` witness.
+    simpa using (Embed.embedBV_of_pos?_some (Aold := Aold) (Anew := Anew) (x := x) (j := iNew) (i := iOld) hpos)
+  have hRight : unpackPlane Aold x j = x iOld := by
+    simp [unpackPlane, hiOld]
+  exact hLeft.trans hRight.symm
+
+theorem getBit_decodeFromLevel_allZero_eq_entryCorner
+    {n : Nat} {m : Exponents n} :
+    ∀ (s : Nat) (st : State n (activeAxes m s)) (ds : Digits)
+      (pAcc pOut : PointBV m),
+      Digits.allZeroForDecode m s ds →
+      decodeFromLevel (m := m) s st ds pAcc = some pOut →
+      ∀ (j : Axis n), j ∈ activeAxes m s →
+        ∀ i, i < s → getBit (pOut j) i = unpackPlane (activeAxes m s) (State.entryCorner st) j := by
+  intro s
+  induction s with
+  | zero =>
+      intro st ds pAcc pOut hds hDec j hj i hi
+      cases hi
+  | succ s ih =>
+      intro st ds pAcc pOut hds hDec j hj i hi
+      -- Expose the head digit and its `toNat` constraint.
+      rcases hds with ⟨w, rest, hds', hw, hrest⟩
+      subst hds'
+      -- Split on whether we're at the last level.
+      cases s with
+      | zero =>
+          -- `s = 1`: only plane `0` is written.
+          have hi0 : i = 0 := Nat.le_zero.mp (Nat.lt_succ_iff.mp hi)
+          subst hi0
+          have hPlane :
+              packPlane (activeAxes m 1) pOut 0 = State.entryCorner st := by
+            simpa using
+              (DecodeHead.packPlane_decodeFromLevel_head_toNat_zero_eq_entryCorner (m := m)
+                (s := 0) (st := st) (w := w) (rest := rest) (pAcc := pAcc) (pOut := pOut) hDec hw)
+          -- Read the bit for axis `j` from the packed plane.
+          have hjA : j ∈ activeAxes m 1 := hj
+          rcases Pos.pos?_some_of_mem (xs := activeAxes m 1) (a := j) hjA with ⟨t, ht⟩
+          have hget : (activeAxes m 1).get t = j :=
+            Pos.get_of_pos?_some (xs := activeAxes m 1) (a := j) (i := t) ht
+          have hbit : getBit (pOut j) 0 = (packPlane (activeAxes m 1) pOut 0) t := by
+            simpa [packPlane] using congrArg (fun a => getBit (pOut a) 0) hget.symm
+          -- Finish by rewriting with `hPlane` and `ht`.
+          calc
+            getBit (pOut j) 0 = (packPlane (activeAxes m 1) pOut 0) t := hbit
+            _ = (State.entryCorner st) t := by simpa using congrArg (fun l => l t) hPlane
+            _ = unpackPlane (activeAxes m 1) (State.entryCorner st) j := by
+                  simp [unpackPlane, ht]
+      | succ s' =>
+          -- `s = succ (succ s')`: recurse to the next level down.
+          have hi' : i = Nat.succ s' ∨ i < Nat.succ s' := by
+            exact eq_or_lt_of_le (Nat.lt_succ_iff.mp hi)
+          cases hi' with
+          | inl hiTop =>
+              subst hiTop
+              have hPlane :
+                  packPlane (activeAxes m (Nat.succ (Nat.succ s'))) pOut (Nat.succ s') =
+                    State.entryCorner st := by
+                simpa using
+                  (DecodeHead.packPlane_decodeFromLevel_head_toNat_zero_eq_entryCorner (m := m)
+                    (s := Nat.succ s') (st := st) (w := w) (rest := rest) (pAcc := pAcc)
+                    (pOut := pOut) hDec hw)
+              rcases Pos.pos?_some_of_mem (xs := activeAxes m (Nat.succ (Nat.succ s'))) (a := j) hj with
+                ⟨t, ht⟩
+              have hget :
+                  (activeAxes m (Nat.succ (Nat.succ s'))).get t = j :=
+                Pos.get_of_pos?_some (xs := activeAxes m (Nat.succ (Nat.succ s'))) (a := j) (i := t) ht
+              have hbit :
+                  getBit (pOut j) (Nat.succ s') =
+                    (packPlane (activeAxes m (Nat.succ (Nat.succ s'))) pOut (Nat.succ s')) t := by
+                simpa [packPlane] using congrArg (fun a => getBit (pOut a) (Nat.succ s')) hget.symm
+              calc
+                getBit (pOut j) (Nat.succ s')
+                    =
+                  (packPlane (activeAxes m (Nat.succ (Nat.succ s'))) pOut (Nat.succ s')) t := hbit
+                _ = (State.entryCorner st) t := by
+                      simpa using congrArg (fun l => l t) hPlane
+                _ = unpackPlane (activeAxes m (Nat.succ (Nat.succ s'))) (State.entryCorner st) j := by
+                      simp [unpackPlane, ht]
+          | inr hiLo =>
+              -- Extract the recursive call from `decodeFromLevel`.
+              let A : List (Axis n) := activeAxes m (Nat.succ (Nat.succ s'))
+              have hk : (A.length : Nat) = A.length := rfl
+              let w' : BV A.length := by
+                simpa [A] using w
+              let l : BV A.length := Tinv st.e st.dPos.val (BV.gc w')
+              let p1 : PointBV m := writePlane A l pAcc (Nat.succ s')
+              let stNext : State n A := stateUpdate (A := A) st w'
+              have hDec' : decodeFromLevel (m := m) (Nat.succ (Nat.succ s')) st
+                  (⟨A.length, w'⟩ :: rest) pAcc = some pOut := by
+                simpa [A, w', hk] using hDec
+              -- Unfold one step and split on the embedding.
+              simp [decodeFromLevel, A, w', l, p1, stNext] at hDec'
+              split at hDec'
+              · exact Option.noConfusion hDec'
+              · rename_i stRec hEmb
+                have hRec :
+                    decodeFromLevel (m := m) (Nat.succ s') stRec rest p1 = some pOut := hDec'
+                -- Apply the IH at the recursive level.
+                have hjRec : j ∈ activeAxes m (Nat.succ s') :=
+                  ActiveAxes.mem_activeAxes_of_mem_activeAxes_succ (m := m) (s := Nat.succ s') (j := j) hj
+                have hIH :=
+                  ih (st := stRec) (ds := rest) (pAcc := p1) (pOut := pOut) hrest hRec j hjRec i hiLo
+                -- Relate the entry corners across the step.
+                have hEntryNext :
+                    State.entryCorner stNext = State.entryCorner st := by
+                  simpa [A] using (State.entryCorner_stateUpdate_toNat_zero (st := st) (w := w') hw)
+                have hEntryRec :
+                    State.entryCorner stRec =
+                      Embed.embedBV A (activeAxes m (Nat.succ s')) (State.entryCorner st) := by
+                  -- `entryCorner` commutes with embedding, and is preserved by the zero digit.
+                  have hEmbEntry :=
+                    Embed.embedState?_entryCorner_eq (Aold := A) (Anew := activeAxes m (Nat.succ s')) (st := stNext)
+                      (st' := stRec) hEmb
+                  simpa [hEntryNext] using hEmbEntry
+                have hCorner :
+                    unpackPlane (activeAxes m (Nat.succ s')) (State.entryCorner stRec) j =
+                      unpackPlane A (State.entryCorner st) j := by
+                  have hjNew : j ∈ activeAxes m (Nat.succ s') := hjRec
+                  -- Rewrite `entryCorner stRec` using `hEntryRec` and evaluate `unpackPlane`.
+                  simpa [hEntryRec] using
+                    (unpackPlane_embedBV_eq_of_mem (Aold := A) (Anew := activeAxes m (Nat.succ s')) (x := State.entryCorner st)
+                      (j := j) hj hjNew)
+                -- Finish.
+                simpa [A] using hIH.trans hCorner
+
+theorem getBit_decodeFromLevel_allMax_eq_exitCorner
+    {n : Nat} {m : Exponents n} :
+    ∀ (s : Nat) (st : State n (activeAxes m s)) (ds : Digits)
+      (pAcc pOut : PointBV m),
+      Digits.allMaxForDecode m s ds →
+      decodeFromLevel (m := m) s st ds pAcc = some pOut →
+      ∀ (j : Axis n), j ∈ activeAxes m s →
+        ∀ i, i < s → getBit (pOut j) i = unpackPlane (activeAxes m s) (State.exitCorner st) j := by
+  intro s
+  induction s with
+  | zero =>
+      intro st ds pAcc pOut hds hDec j hj i hi
+      cases hi
+  | succ s ih =>
+      intro st ds pAcc pOut hds hDec j hj i hi
+      rcases hds with ⟨w, rest, hds', hw, hrest⟩
+      subst hds'
+      cases s with
+      | zero =>
+          have hi0 : i = 0 := Nat.le_zero.mp (Nat.lt_succ_iff.mp hi)
+          subst hi0
+          have hPlane :
+              packPlane (activeAxes m 1) pOut 0 = State.exitCorner st := by
+            simpa using
+              (DecodeHead.packPlane_decodeFromLevel_head_toNat_two_pow_sub_one_eq_exitCorner (m := m)
+                (s := 0) (st := st) (w := w) (rest := rest) (pAcc := pAcc) (pOut := pOut) hDec hw)
+          have hjA : j ∈ activeAxes m 1 := hj
+          rcases Pos.pos?_some_of_mem (xs := activeAxes m 1) (a := j) hjA with ⟨t, ht⟩
+          have hget : (activeAxes m 1).get t = j :=
+            Pos.get_of_pos?_some (xs := activeAxes m 1) (a := j) (i := t) ht
+          have hbit : getBit (pOut j) 0 = (packPlane (activeAxes m 1) pOut 0) t := by
+            simpa [packPlane] using congrArg (fun a => getBit (pOut a) 0) hget.symm
+          calc
+            getBit (pOut j) 0 = (packPlane (activeAxes m 1) pOut 0) t := hbit
+            _ = (State.exitCorner st) t := by simpa using congrArg (fun l => l t) hPlane
+            _ = unpackPlane (activeAxes m 1) (State.exitCorner st) j := by
+                  simp [unpackPlane, ht]
+      | succ s' =>
+          have hi' : i = Nat.succ s' ∨ i < Nat.succ s' := by
+            exact eq_or_lt_of_le (Nat.lt_succ_iff.mp hi)
+          cases hi' with
+          | inl hiTop =>
+              subst hiTop
+              have hPlane :
+                  packPlane (activeAxes m (Nat.succ (Nat.succ s'))) pOut (Nat.succ s') =
+                    State.exitCorner st := by
+                simpa using
+                  (DecodeHead.packPlane_decodeFromLevel_head_toNat_two_pow_sub_one_eq_exitCorner (m := m)
+                    (s := Nat.succ s') (st := st) (w := w) (rest := rest) (pAcc := pAcc)
+                    (pOut := pOut) hDec hw)
+              rcases Pos.pos?_some_of_mem (xs := activeAxes m (Nat.succ (Nat.succ s'))) (a := j) hj with
+                ⟨t, ht⟩
+              have hget :
+                  (activeAxes m (Nat.succ (Nat.succ s'))).get t = j :=
+                Pos.get_of_pos?_some (xs := activeAxes m (Nat.succ (Nat.succ s'))) (a := j) (i := t) ht
+              have hbit :
+                  getBit (pOut j) (Nat.succ s') =
+                    (packPlane (activeAxes m (Nat.succ (Nat.succ s'))) pOut (Nat.succ s')) t := by
+                simpa [packPlane] using congrArg (fun a => getBit (pOut a) (Nat.succ s')) hget.symm
+              calc
+                getBit (pOut j) (Nat.succ s')
+                    =
+                  (packPlane (activeAxes m (Nat.succ (Nat.succ s'))) pOut (Nat.succ s')) t := hbit
+                _ = (State.exitCorner st) t := by
+                      simpa using congrArg (fun l => l t) hPlane
+                _ = unpackPlane (activeAxes m (Nat.succ (Nat.succ s'))) (State.exitCorner st) j := by
+                      simp [unpackPlane, ht]
+          | inr hiLo =>
+              let A : List (Axis n) := activeAxes m (Nat.succ (Nat.succ s'))
+              have hk : (A.length : Nat) = A.length := rfl
+              let w' : BV A.length := by
+                simpa [A] using w
+              let l : BV A.length := Tinv st.e st.dPos.val (BV.gc w')
+              let p1 : PointBV m := writePlane A l pAcc (Nat.succ s')
+              let stNext : State n A := stateUpdate (A := A) st w'
+              have hDec' : decodeFromLevel (m := m) (Nat.succ (Nat.succ s')) st
+                  (⟨A.length, w'⟩ :: rest) pAcc = some pOut := by
+                simpa [A, w', hk] using hDec
+              simp [decodeFromLevel, A, w', l, p1, stNext] at hDec'
+              split at hDec'
+              · exact Option.noConfusion hDec'
+              · rename_i stRec hEmb
+                have hRec :
+                    decodeFromLevel (m := m) (Nat.succ s') stRec rest p1 = some pOut := hDec'
+                have hjRec : j ∈ activeAxes m (Nat.succ s') :=
+                  ActiveAxes.mem_activeAxes_of_mem_activeAxes_succ (m := m) (s := Nat.succ s') (j := j) hj
+                have hIH :=
+                  ih (st := stRec) (ds := rest) (pAcc := p1) (pOut := pOut) hrest hRec j hjRec i hiLo
+                have hExitNext :
+                    State.exitCorner (stateUpdate A st w') = State.exitCorner st := by
+                  -- Convert the head-digit hypothesis to the needed `toNat` equality.
+                  have hw' : BV.toNat w' = 2 ^ A.length - 1 := by simpa [A] using hw
+                  simpa [A] using (State.exitCorner_stateUpdate_toNat_two_pow_sub_one (st := st) (w := w') hw')
+                have hExitRec :
+                    State.exitCorner stRec =
+                      Embed.embedBV A (activeAxes m (Nat.succ s')) (State.exitCorner st) := by
+                  have hOld : A.Nodup := ActiveAxes.nodup_activeAxes (m := m) (s := Nat.succ (Nat.succ s'))
+                  have hNew : (activeAxes m (Nat.succ s')).Nodup :=
+                    ActiveAxes.nodup_activeAxes (m := m) (s := Nat.succ s')
+                  have hEmbExit :=
+                    Embed.embedState?_exitCorner_eq (Aold := A) (Anew := activeAxes m (Nat.succ s'))
+                      (hOld := hOld) (hNew := hNew) (st := stateUpdate A st w') (st' := stRec) hEmb
+                  simpa [hExitNext] using hEmbExit
+                have hCorner :
+                    unpackPlane (activeAxes m (Nat.succ s')) (State.exitCorner stRec) j =
+                      unpackPlane A (State.exitCorner st) j := by
+                  have hjNew : j ∈ activeAxes m (Nat.succ s') := hjRec
+                  simpa [hExitRec] using
+                    (unpackPlane_embedBV_eq_of_mem (Aold := A) (Anew := activeAxes m (Nat.succ s')) (x := State.exitCorner st)
+                      (j := j) hj hjNew)
+                simpa [A] using hIH.trans hCorner
+
+end DecodeSuffix
+
 end AnisoHilbert

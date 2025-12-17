@@ -66,6 +66,12 @@ theorem toNat_lt_base {k : Nat} (w : BV k) : BV.toNat w < base k := by
   -- `base k = Nat.shiftLeft 1 k`.
   simpa [base] using (BV.toNat_lt_shiftLeft_one (x := w))
 
+/-- Re-express `maxVal` as `2^k - 1` in terms of the underlying bitvector `toNat`. -/
+theorem val_eq_maxVal_iff_toNat_eq_two_pow_sub_one (d : Digit) :
+    val d = maxVal d.1 ↔ BV.toNat d.2 = 2 ^ d.1 - 1 := by
+  -- `val d` is definitionally `BV.toNat d.2`, and `maxVal k = base k - 1 = 2^k - 1`.
+  simp [val, maxVal, base, Nat.shiftLeft_eq]
+
 /--
 If `succDigit` reports a carry-out, then the input digit was already maximal,
 so its value is `maxVal k = 2^k - 1`.
@@ -115,6 +121,23 @@ theorem succ_same_prefix_zero_suffix_max_suffix (ds ds' : Digits) (h : succ ds =
   refine ⟨hi, pivot, lo, hds, hds', ?_, hpivotCarry⟩
   intro d hd
   exact succDigit_carry_true_imp_val_eq_maxVal d (hloCarry d hd)
+
+/--
+Variant of `succ_same_prefix_zero_suffix_max_suffix` phrased directly in terms of
+`BV.toNat = 2^k - 1` on the low suffix digits.
+-/
+theorem succ_same_prefix_zero_suffix_two_pow_sub_one_suffix (ds ds' : Digits) (h : succ ds = some ds') :
+    ∃ hi pivot lo,
+      ds = hi ++ pivot :: lo ∧
+      ds' = hi ++ (succDigit pivot).1 :: (lo.map zeroLike) ∧
+      (∀ d ∈ lo, BV.toNat d.2 = 2 ^ d.1 - 1) ∧
+      (succDigit pivot).2 = false := by
+  classical
+  rcases succ_same_prefix_zero_suffix_max_suffix (ds := ds) (ds' := ds') h with
+    ⟨hi, pivot, lo, hds, hds', hloMax, hpivotCarry⟩
+  refine ⟨hi, pivot, lo, hds, hds', ?_, hpivotCarry⟩
+  intro d hd
+  exact (val_eq_maxVal_iff_toNat_eq_two_pow_sub_one d).1 (hloMax d hd)
 
 end Digits
 
