@@ -2,6 +2,8 @@ import Mathlib
 
 import AnisoHilbert.AdjacencyLemmas
 import AnisoHilbert.ActiveAxesLemmas
+import AnisoHilbert.BVNatLemmas
+import AnisoHilbert.DecodeHeadXorLemmas
 import AnisoHilbert.DecodeHigherPlaneLemmas
 import AnisoHilbert.GrayAdjacencyLemmas
 
@@ -227,6 +229,67 @@ theorem lemma_5_1
   refine ⟨g, ?_⟩
   -- Combine the computed XOR with the rotation lemma.
   simpa [hT, hGc, hg]
+
+/-!
+### Seam helper lemmas (for Theorem 5.4)
+
+The core continuity proof will compare two successful decodes whose head digit differs by a
+variable-radix successor.  The next lemma specializes the `DecodeHeadXor` bridge lemma to that
+successor form, using `BV.ofNat_toNat` to convert an arbitrary head word into `ofNat (toNat w)`.
+-/
+
+theorem pivot_plane_oneHot_of_decodeFromLevel_toNat_succ_heads
+    {n : Nat} {m : Exponents n}
+    (s : Nat)
+    (st : State n (activeAxes m (Nat.succ s)))
+    (w : BV (activeAxes m (Nat.succ s)).length)
+    (rest₁ rest₂ : Digits)
+    (pAcc pOut₁ pOut₂ : PointBV m)
+    (hDec₁ :
+      decodeFromLevel (m := m) (Nat.succ s) st
+        (⟨(activeAxes m (Nat.succ s)).length, w⟩ :: rest₁) pAcc = some pOut₁)
+    (hDec₂ :
+      decodeFromLevel (m := m) (Nat.succ s) st
+        (⟨(activeAxes m (Nat.succ s)).length,
+          BV.ofNat (k := (activeAxes m (Nat.succ s)).length) (BV.toNat w).succ⟩ :: rest₂) pAcc =
+        some pOut₂)
+    (ht : tsb (BV.toNat w) < (activeAxes m (Nat.succ s)).length) :
+    ∃ g : Fin (activeAxes m (Nat.succ s)).length,
+      BV.xor (packPlane (activeAxes m (Nat.succ s)) pOut₁ s)
+          (packPlane (activeAxes m (Nat.succ s)) pOut₂ s)
+        = BV.oneHotFin g := by
+  classical
+  let k : Nat := (activeAxes m (Nat.succ s)).length
+  let i : Nat := BV.toNat w
+  have hw : BV.ofNat (k := k) i = w := by
+    simpa [k, i] using (BV.ofNat_toNat (x := w))
+
+  have hDec₁' :
+      decodeFromLevel (m := m) (Nat.succ s) st
+        (⟨k, BV.ofNat (k := k) i⟩ :: rest₁) pAcc = some pOut₁ := by
+    simpa [k, i, hw] using hDec₁
+
+  have hXor :
+      BV.xor (packPlane (activeAxes m (Nat.succ s)) pOut₁ s)
+          (packPlane (activeAxes m (Nat.succ s)) pOut₂ s)
+        =
+      BV.rotL (k := k) (st.dPos.val.succ) (BV.oneHotFin ⟨tsb i, by simpa [i, k] using ht⟩) := by
+    -- `DecodeHeadXor` gives the rotated one-hot, but expects `ofNat i` and `ofNat (i+1)`.
+    simpa [k, i] using
+      (DecodeHeadXor.packPlane_xor_decodeFromLevel_ofNat_succ_heads (m := m)
+        (s := s) (st := st) (i := i)
+        (rest₁ := rest₁) (rest₂ := rest₂)
+        (pAcc := pAcc) (pOut₁ := pOut₁) (pOut₂ := pOut₂)
+        hDec₁' hDec₂ (ht := by simpa [i, k] using ht))
+
+  -- A rotation of a one-hot is still one-hot.
+  have hRot : ∃ g : Fin k, BV.rotL (k := k) (st.dPos.val.succ) (BV.oneHotFin ⟨tsb i, by simpa [i, k] using ht⟩) =
+      BV.oneHotFin g :=
+    BV.rotL_oneHotFin (k := k) (r := st.dPos.val.succ) ⟨tsb i, by simpa [i, k] using ht⟩
+
+  rcases hRot with ⟨g, hg⟩
+  refine ⟨g, ?_⟩
+  simpa [hXor, hg]
 
 /-- Lemma 5.2 (Hilbert child endpoints glue along that bit). -/
 theorem lemma_5_2
