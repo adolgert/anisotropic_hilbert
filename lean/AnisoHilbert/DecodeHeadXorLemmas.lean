@@ -1,5 +1,6 @@
 import AnisoHilbert.DecodeHeadPlaneLemmas
 import AnisoHilbert.AdjacencyLemmas
+import AnisoHilbert.GrayAdjacencyLemmas
 
 namespace AnisoHilbert
 
@@ -75,6 +76,45 @@ theorem packPlane_xor_decodeFromLevel_heads
             simp [hP₁, hP₂]
     _ = rotL (st.dPos.val.succ) (xor (gc w₁) (gc w₂)) := by
             simpa using (BV.xor_Tinv (e := st.e) (d := st.dPos.val) (x := gc w₁) (y := gc w₂))
+
+theorem packPlane_xor_decodeFromLevel_ofNat_succ_heads
+    {n : Nat} {m : Exponents n}
+    (s : Nat)
+    (st : State n (activeAxes m (Nat.succ s)))
+    (i : Nat)
+    (rest₁ rest₂ : Digits)
+    (pAcc pOut₁ pOut₂ : PointBV m)
+    (hDec₁ :
+      decodeFromLevel (m := m) (Nat.succ s) st
+        (⟨(activeAxes m (Nat.succ s)).length,
+          BV.ofNat (k := (activeAxes m (Nat.succ s)).length) i⟩ :: rest₁) pAcc = some pOut₁)
+    (hDec₂ :
+      decodeFromLevel (m := m) (Nat.succ s) st
+        (⟨(activeAxes m (Nat.succ s)).length,
+          BV.ofNat (k := (activeAxes m (Nat.succ s)).length) i.succ⟩ :: rest₂) pAcc = some pOut₂)
+    (ht : tsb i < (activeAxes m (Nat.succ s)).length) :
+    xor (packPlane (activeAxes m (Nat.succ s)) pOut₁ s)
+        (packPlane (activeAxes m (Nat.succ s)) pOut₂ s)
+      =
+    rotL (st.dPos.val.succ) (oneHotFin ⟨tsb i, ht⟩) := by
+  have h :=
+    packPlane_xor_decodeFromLevel_heads (m := m)
+      (s := s) (st := st)
+      (w₁ := BV.ofNat (k := (activeAxes m (Nat.succ s)).length) i)
+      (w₂ := BV.ofNat (k := (activeAxes m (Nat.succ s)).length) i.succ)
+      (rest₁ := rest₁) (rest₂ := rest₂)
+      (pAcc := pAcc) (pOut₁ := pOut₁) (pOut₂ := pOut₂)
+      hDec₁ hDec₂
+
+  have hgc :
+      xor (gc (ofNat (k := (activeAxes m (Nat.succ s)).length) i))
+          (gc (ofNat (k := (activeAxes m (Nat.succ s)).length) i.succ))
+        =
+      oneHotFin ⟨tsb i, ht⟩ := by
+    simpa using
+      (xor_gc_ofNat_succ_eq_oneHotFin (k := (activeAxes m (Nat.succ s)).length) i ht)
+
+  simpa [hgc] using h
 
 end DecodeHeadXor
 
