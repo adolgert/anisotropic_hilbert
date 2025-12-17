@@ -16,3 +16,4 @@ import AnisoHilbert.DecodeHigherPlaneLemmas
 import AnisoHilbert.EncodeAfterDecode
 import AnisoHilbert.EncodeTotal
 import AnisoHilbert.MutualInversesTotal
+import AnisoHilbert.DiscreteProof
