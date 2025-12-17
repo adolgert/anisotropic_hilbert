@@ -4,6 +4,7 @@ import AnisoHilbert.Lemma41
 import AnisoHilbert.GrayAdjacencyLemmas
 import AnisoHilbert.Loops
 import AnisoHilbert.IndexSucc
+import AnisoHilbert.DigitsCarryMaxLemmas
 import AnisoHilbert.DigitsSuccDecomp
 import AnisoHilbert.ActiveAxesLemmas
 import AnisoHilbert.EmbedLemmas
