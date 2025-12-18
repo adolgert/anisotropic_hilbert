@@ -3,6 +3,7 @@ import Mathlib
 import AnisoHilbert.AdjacencyLemmas
 import AnisoHilbert.ActiveAxesLemmas
 import AnisoHilbert.BVNatLemmas
+import AnisoHilbert.ChildGlueLemmas
 import AnisoHilbert.DecodeHeadXorLemmas
 import AnisoHilbert.DecodeHigherPlaneLemmas
 import AnisoHilbert.GrayAdjacencyLemmas
@@ -170,12 +171,14 @@ theorem pivot_plane_oneHot_of_decodeFromLevel_toNat_succ_heads
 
 /-- Lemma 5.2 (Hilbert child endpoints glue along that bit). -/
 theorem lemma_5_2
-    {k : Nat} (e eNext : BV k) (d g : Fin k)
-    (hH1 : eNext = xor (xor e (oneHotFin d)) (oneHotFin g)) :
-    let f : BV k := xor e (oneHotFin d)
-    eNext = xor f (oneHotFin g) := by
-  intro f
-  simpa [f] using hH1
+    {n : Nat} {A : List (Axis n)} (st : State n A) (w : BV A.length)
+    (ht : tsb (toNat w) < A.length) :
+    (stateUpdate A st (ofNat (k := A.length) (toNat w).succ)).e
+      =
+    xor (xor (stateUpdate A st w).e (oneHotFin (stateUpdate A st w).dPos))
+        (rotL (k := A.length) (st.dPos.val.succ) (oneHotFin ⟨tsb (toNat w), ht⟩)) := by
+  simpa using
+    (BV.entryCorner_stateUpdate_succ_eq_exitCorner_stateUpdate_xor_rotL_oneHotFin_tsb (st := st) (w := w) ht)
 
 /-- Lemma 5.3 (Cube-corner adjacency implies unit lattice step after scaling). -/
 theorem lemma_5_3
