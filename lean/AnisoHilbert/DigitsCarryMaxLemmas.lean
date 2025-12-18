@@ -109,6 +109,157 @@ theorem succDigit_carry_true_imp_val_eq_maxVal (d : Digit) :
       -- Unfold `val` / `maxVal` and conclude.
       simpa [Digits.val, Digits.maxVal, n, b, hn]
 
+/-!
+### No-carry facts for `succDigit`
+
+These are small helpers used later in the lattice-continuity proof (Theorem 5.4):
+
+* `carry = false` means the numeric value increments without overflow,
+  so the successor word is `ofNat (toNat w).succ`;
+* in particular, `toNat w` is not the all-ones value `2^k - 1`, so `tsb (toNat w) < k`.
+-/
+
+theorem succDigit_carry_false_imp_toNat_succ_lt_base (d : Digit) :
+    (succDigit d).2 = false → (BV.toNat d.2).succ < base d.1 := by
+  intro hc
+  cases d with
+  | mk k w =>
+      by_cases hlt : (BV.toNat w).succ < base k
+      · exact hlt
+      · -- In the overflow branch, `succDigit` reports `true`, contradicting `hc`.
+        have : (true : Bool) = false := by
+          simpa [succDigit, hlt] using hc
+        cases this
+
+theorem succDigit_eq_ofNat_succ_of_carry_false (d : Digit) (hc : (succDigit d).2 = false) :
+    (succDigit d).1 = ⟨d.1, BV.ofNat (k := d.1) (BV.toNat d.2).succ⟩ := by
+  cases d with
+  | mk k w =>
+      have hlt : (BV.toNat w).succ < base k :=
+        succDigit_carry_false_imp_toNat_succ_lt_base (d := ⟨k, w⟩) hc
+      simp [succDigit, hlt]
+
+private theorem two_pow_sub_one_le_of_le_tsb : ∀ (k x : Nat), k ≤ tsb x → 2 ^ k - 1 ≤ x := by
+  intro k
+  induction k with
+  | zero =>
+      intro x hx
+      simp
+  | succ k ih =>
+      intro x hx
+      have hxpos : 0 < tsb x := Nat.lt_of_lt_of_le (Nat.succ_pos k) hx
+      have hxodd : x % 2 = 1 := by
+        have h01 := Nat.mod_two_eq_zero_or_one x
+        cases h01 with
+        | inl h0 =>
+            have htsb0 : tsb x = 0 := by
+              rw [tsb.eq_1]
+              simp [h0, -tsb.eq_1]
+            have : False := by simpa [htsb0] using hxpos
+            exact False.elim this
+        | inr h1 =>
+            exact h1
+
+      have htsb : tsb x = Nat.succ (tsb (x / 2)) := by
+        rw [tsb.eq_1]
+        simp [hxodd, -tsb.eq_1]
+
+      have hx' : k ≤ tsb (x / 2) := by
+        have hx' : Nat.succ k ≤ Nat.succ (tsb (x / 2)) := by
+          simpa [htsb] using hx
+        exact Nat.le_of_succ_le_succ hx'
+
+      have hind : 2 ^ k - 1 ≤ x / 2 := ih (x / 2) hx'
+      -- Reconstruct `x = 2*(x/2) + 1` from `x % 2 = 1`.
+      have hxrepr : x = 2 * (x / 2) + 1 := by
+        have hdiv := Nat.div_add_mod x 2
+        calc
+          x = (x / 2) * 2 + x % 2 := by
+                simpa [Nat.mul_comm] using hdiv.symm
+          _ = 2 * (x / 2) + 1 := by
+                simpa [Nat.mul_comm, hxodd]
+      -- Multiply the IH bound by `2` and add `1`.
+      have hmul : 2 * (2 ^ k - 1) + 1 ≤ 2 * (x / 2) + 1 :=
+        Nat.add_le_add_right (Nat.mul_le_mul_left 2 hind) 1
+      -- Normalize the LHS to `2^(k+1) - 1`.
+      have hnorm : 2 * (2 ^ k - 1) + 1 = 2 ^ Nat.succ k - 1 := by
+        have hkpos : 1 ≤ 2 ^ k := Nat.succ_le_iff.2 (Nat.pow_pos (n := k) (Nat.succ_pos 1))
+        have ha2 : 2 ≤ 2 * 2 ^ k := by
+          have : 2 * 1 ≤ 2 * 2 ^ k := Nat.mul_le_mul_left 2 hkpos
+          simpa using this
+        calc
+          2 * (2 ^ k - 1) + 1
+              = (2 * 2 ^ k - 2) + 1 := by
+                  simp [Nat.mul_sub_left_distrib, Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+          _ = 2 * 2 ^ k - 1 := by
+                have ha1 : 1 ≤ 2 * 2 ^ k - 1 := by
+                  have := Nat.sub_le_sub_right ha2 1
+                  simpa using this
+                have h : (2 * 2 ^ k - 1 - 1) + 1 = 2 * 2 ^ k - 1 := by
+                  simpa using (Nat.sub_add_cancel ha1)
+                have hsub : 2 * 2 ^ k - 1 - 1 = 2 * 2 ^ k - 2 := by
+                  simpa [Nat.sub_sub, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using
+                    (Nat.sub_sub (2 * 2 ^ k) 1 1)
+                simpa [hsub] using h
+          _ = 2 ^ Nat.succ k - 1 := by
+                simp [Nat.pow_succ, Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+      have : 2 ^ Nat.succ k - 1 ≤ x := by
+        calc
+          2 ^ Nat.succ k - 1 = 2 * (2 ^ k - 1) + 1 := hnorm.symm
+          _ ≤ 2 * (x / 2) + 1 := hmul
+          _ = x := hxrepr.symm
+      exact this
+
+private theorem tsb_lt_of_lt_two_pow
+    (k x : Nat) (hk : 0 < k) (hx : x < 2 ^ k) (hne : x ≠ 2 ^ k - 1) : tsb x < k := by
+  by_contra hge
+  have hle : 2 ^ k - 1 ≤ x := two_pow_sub_one_le_of_le_tsb k x (Nat.le_of_not_gt hge)
+  have hkpos : 1 ≤ 2 ^ k := Nat.succ_le_iff.2 (Nat.pow_pos (n := k) (Nat.succ_pos 1))
+  have hxle : x ≤ 2 ^ k - 1 := by
+    have hrew : 2 ^ k = (2 ^ k - 1) + 1 := by
+      simpa [Nat.add_comm, Nat.succ_eq_add_one] using (Nat.sub_add_cancel hkpos).symm
+    have hxlt : x < (2 ^ k - 1).succ := by
+      simpa [Nat.succ_eq_add_one] using (lt_of_lt_of_eq hx hrew)
+    exact Nat.le_of_lt_succ hxlt
+  have hEq : x = 2 ^ k - 1 := Nat.le_antisymm hxle hle
+  exact hne hEq
+
+theorem succDigit_carry_false_imp_tsb_lt (d : Digit) :
+    (succDigit d).2 = false → tsb (BV.toNat d.2) < d.1 := by
+  intro hc
+  cases d with
+  | mk k w =>
+      cases k with
+      | zero =>
+          -- Width 0 digits always overflow: `0 + 1` cannot fit in base `2^0 = 1`.
+          have : (true : Bool) = false := by
+            simpa [succDigit, base] using hc
+          cases this
+      | succ k' =>
+          have hk : 0 < Nat.succ k' := Nat.succ_pos k'
+          have hx : BV.toNat w < 2 ^ Nat.succ k' := by
+            -- `base (succ k') = 2^(succ k')`
+            simpa [base, Nat.shiftLeft_eq] using (toNat_lt_base (k := Nat.succ k') w)
+          have hsucc : (BV.toNat w).succ < 2 ^ Nat.succ k' := by
+            -- from carry-false, the successor is still < base
+            simpa [base, Nat.shiftLeft_eq] using
+              (succDigit_carry_false_imp_toNat_succ_lt_base (d := ⟨Nat.succ k', w⟩) hc)
+          have hne : BV.toNat w ≠ 2 ^ Nat.succ k' - 1 := by
+            intro hEq
+            have hkPowPos : 0 < 2 ^ Nat.succ k' := Nat.pow_pos (n := Nat.succ k') (Nat.succ_pos 1)
+            have hkpos : 1 ≤ 2 ^ Nat.succ k' := Nat.succ_le_iff.2 hkPowPos
+            have hmaxSucc : (2 ^ Nat.succ k' - 1).succ = 2 ^ Nat.succ k' := by
+              simpa [Nat.succ_eq_add_one] using (Nat.sub_add_cancel hkpos)
+            have hSuccEq : (BV.toNat w).succ = 2 ^ Nat.succ k' := by
+              simpa [hEq] using hmaxSucc
+            -- contradict `hsucc` by rewriting the RHS to `w.toNat.succ`
+            have h : (BV.toNat w).succ < (BV.toNat w).succ := by
+              have h' := hsucc
+              rw [← hSuccEq] at h'
+              exact h'
+            exact Nat.lt_irrefl _ h
+          exact tsb_lt_of_lt_two_pow (k := Nat.succ k') (x := BV.toNat w) hk hx hne
+
 theorem succ_same_prefix_zero_suffix_max_suffix (ds ds' : Digits) (h : succ ds = some ds') :
     ∃ hi pivot lo,
       ds = hi ++ pivot :: lo ∧

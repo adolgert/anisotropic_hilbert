@@ -4,6 +4,7 @@ import AnisoHilbert.AdjacencyLemmas
 import AnisoHilbert.ActiveAxesLemmas
 import AnisoHilbert.BVNatLemmas
 import AnisoHilbert.ChildGlueLemmas
+import AnisoHilbert.DigitsCarryMaxLemmas
 import AnisoHilbert.DecodeHeadXorLemmas
 import AnisoHilbert.DecodeHigherPlaneLemmas
 import AnisoHilbert.GrayAdjacencyLemmas
@@ -168,6 +169,80 @@ theorem pivot_plane_oneHot_of_decodeFromLevel_toNat_succ_heads
   rcases hRot with ⟨g, hg⟩
   refine ⟨g, ?_⟩
   simpa [hXor, hg]
+
+theorem pivot_plane_oneHot_of_decodeFromLevel_succDigit_heads
+    {n : Nat} {m : Exponents n}
+    (s : Nat)
+    (st : State n (activeAxes m (Nat.succ s)))
+    (d : Digit)
+    (rest₁ rest₂ : Digits)
+    (pAcc pOut₁ pOut₂ : PointBV m)
+    (hDec₁ :
+      decodeFromLevel (m := m) (Nat.succ s) st (d :: rest₁) pAcc = some pOut₁)
+    (hDec₂ :
+      decodeFromLevel (m := m) (Nat.succ s) st ((Digits.succDigit d).1 :: rest₂) pAcc = some pOut₂)
+    (hCarry : (Digits.succDigit d).2 = false) :
+    ∃ g : Fin (activeAxes m (Nat.succ s)).length,
+      BV.xor (packPlane (activeAxes m (Nat.succ s)) pOut₁ s)
+          (packPlane (activeAxes m (Nat.succ s)) pOut₂ s)
+        = BV.oneHotFin g := by
+  classical
+  -- Extract the width match from the successful decodes.
+  rcases d with ⟨kW, w⟩
+  let A : List (Axis n) := activeAxes m (Nat.succ s)
+  have hkW : kW = A.length := by
+    -- If the widths did not match, `decodeFromLevel` would return `none`.
+    by_contra hne
+    have hNone : decodeFromLevel (m := m) (Nat.succ s) st (⟨kW, w⟩ :: rest₁) pAcc = none := by
+      simp [decodeFromLevel, A, hne]
+    have : none = some pOut₁ := by
+      simpa [hNone] using hDec₁
+    exact Option.noConfusion this
+
+  -- Normalize everything after rewriting `kW = A.length`.
+  cases hkW
+  have hCarryW : (Digits.succDigit ⟨A.length, w⟩).2 = false := by
+    simpa using hCarry
+  have hSuccW :
+      (Digits.succDigit ⟨A.length, w⟩).1 = ⟨A.length, BV.ofNat (k := A.length) (BV.toNat w).succ⟩ := by
+    simpa using (Digits.succDigit_eq_ofNat_succ_of_carry_false (d := ⟨A.length, w⟩) hCarryW)
+  have hDec₂' :
+      decodeFromLevel (m := m) (Nat.succ s) st
+        (⟨A.length, BV.ofNat (k := A.length) (BV.toNat w).succ⟩ :: rest₂) pAcc = some pOut₂ := by
+    simpa [hSuccW, A] using hDec₂
+  have ht : tsb (BV.toNat w) < A.length := by
+    simpa [A] using (Digits.succDigit_carry_false_imp_tsb_lt (d := ⟨A.length, w⟩) hCarryW)
+
+  -- Apply the `toNat.succ` head lemma.
+  have h := pivot_plane_oneHot_of_decodeFromLevel_toNat_succ_heads (m := m)
+    (s := s) (st := st) (w := w)
+    (rest₁ := rest₁) (rest₂ := rest₂)
+    (pAcc := pAcc) (pOut₁ := pOut₁) (pOut₂ := pOut₂)
+    (hDec₁ := by simpa [A] using hDec₁) (hDec₂ := hDec₂') ht
+  simpa [A] using h
+
+/--
+Pivot decomposition for `Digits.succ`, matching the “most significant changing digit” discussion
+in the proof of Theorem 5.4 in `discrete_proof.md`.
+-/
+theorem succ_decomp_pivot
+    (ds ds' : Digits) (h : Digits.succ ds = some ds') :
+    ∃ hi pivot lo,
+      ds = hi ++ pivot :: lo ∧
+      ds' = hi ++ (Digits.succDigit pivot).1 :: (lo.map Digits.zeroLike) ∧
+      (∀ d ∈ lo, BV.toNat d.2 = 2 ^ d.1 - 1) ∧
+      (Digits.succDigit pivot).2 = false := by
+  simpa using (Digits.succ_same_prefix_zero_suffix_two_pow_sub_one_suffix (ds := ds) (ds' := ds') h)
+
+/-- Convenience: if `succDigit` does not carry, then its pivot `tsb` index is in range. -/
+theorem tsb_toNat_lt_of_succDigit_snd_false (d : Digit) (h : (Digits.succDigit d).2 = false) :
+    tsb (BV.toNat d.2) < d.1 := by
+  exact Digits.succDigit_carry_false_imp_tsb_lt d h
+
+/-- Convenience: if `succDigit` does not carry, the new digit is `ofNat (toNat w).succ`. -/
+theorem succDigit_eq_ofNat_toNat_succ_of_snd_false (d : Digit) (h : (Digits.succDigit d).2 = false) :
+    (Digits.succDigit d).1 = ⟨d.1, BV.ofNat (k := d.1) (BV.toNat d.2).succ⟩ := by
+  exact Digits.succDigit_eq_ofNat_succ_of_carry_false d h
 
 /-- Lemma 5.2 (Hilbert child endpoints glue along that bit). -/
 theorem lemma_5_2
