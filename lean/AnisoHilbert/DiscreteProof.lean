@@ -339,6 +339,28 @@ private theorem unpackPlane_embedBV_eq_of_mem
     simp [unpackPlane, hiOld]
   exact hLeft.trans hRight.symm
 
+private theorem unpackPlane_embedBV_eq_false_of_not_mem_old
+    {n : Nat} (Aold Anew : List (Axis n)) (x : BV Aold.length) (j : Axis n)
+    (hjOld : j ∉ Aold) (hjNew : j ∈ Anew) :
+    unpackPlane Anew (Embed.embedBV Aold Anew x) j = false := by
+  classical
+  rcases Pos.pos?_some_of_mem (xs := Anew) (a := j) hjNew with ⟨iNew, hiNew⟩
+  have hgetNew : Anew.get iNew = j :=
+    Pos.get_of_pos?_some (xs := Anew) (a := j) (i := iNew) hiNew
+  have hgetNew' : Anew[iNew.1] = j := by
+    simpa using hgetNew
+  have hposOld : pos? Aold Anew[iNew.1] = none := by
+    have : pos? Aold j = none := by
+      cases hpos : pos? Aold j with
+      | none => rfl
+      | some t =>
+          exfalso
+          have : j ∈ Aold := Pos.mem_of_pos?_some (xs := Aold) (a := j) (i := t) hpos
+          exact hjOld this
+    simpa [hgetNew'] using this
+  -- `unpackPlane` selects the embedded bit at `iNew`, which is `false` since `j ∉ Aold`.
+  simp [unpackPlane, hiNew, Embed.embedBV, hposOld]
+
 private theorem unpackPlane_xor
     {n : Nat} (A : List (Axis n)) (x y : BV A.length) (j : Axis n) :
     unpackPlane A (BV.xor x y) j = BV.bxor (unpackPlane A x j) (unpackPlane A y j) := by
@@ -708,6 +730,199 @@ private theorem getBit_decodeFromLevel_head_allZero_suffix_eq_entryCorner
       simpa [A, stNext, State.entryCorner] using hBit.trans hCorner
 
 /-!
+### Inactive axes under all-max/all-zero suffixes
+
+If we decode a head digit at level `s+1` and the remaining suffix digits are either all-max
+(`2^k-1`) or all-zero, then any axis which is *not* active at that level must decode to `0`
+(all bits `false`). This is the key “activation seam is harmless” fact used later when proving
+that only the seam axis changes in the unit-step lemma.
+-/
+
+private theorem getBit_decodeFromLevel_head_allMax_suffix_eq_false_of_not_mem_activeAxes
+    {n : Nat} {m : Exponents n} :
+    ∀ (s : Nat)
+      (st : State n (activeAxes m (Nat.succ s)))
+      (d : Digit) (lo : Digits)
+      (pAcc pOut : PointBV m),
+        decodeFromLevel (m := m) (Nat.succ s) st (d :: lo) pAcc = some pOut →
+        (∀ d ∈ lo, BV.toNat d.2 = 2 ^ d.1 - 1) →
+        ∀ (j : Axis n), j ∉ activeAxes m (Nat.succ s) →
+          ∀ i0, i0 < m j → getBit (pOut j) i0 = false := by
+  intro s
+  induction s with
+  | zero =>
+      intro st d lo pAcc pOut hDec hLoMax j hj i0 hi0
+      have hjAll : j ∈ allAxes n := by simp [allAxes]
+      have hmjlt : m j < 1 := by
+        have : ¬ (1 ≤ m j) := by
+          intro hle
+          apply hj
+          exact (ActiveAxes.mem_activeAxes_iff (m := m) (s := 1) (j := j)).2 ⟨hjAll, hle⟩
+        exact Nat.lt_of_not_ge this
+      have hmj0 : m j = 0 := Nat.lt_one_iff.mp hmjlt
+      cases (Nat.not_lt_zero i0 (by simpa [hmj0] using hi0))
+  | succ s ih =>
+      intro st d lo pAcc pOut hDec hLoMax j hj i0 hi0
+      rcases d with ⟨kW, w⟩
+      let A : List (Axis n) := activeAxes m (Nat.succ (Nat.succ s))
+      by_cases hk : kW = A.length
+      · cases hk
+        let l : BV A.length := Tinv st.e st.dPos.val (BV.gc w)
+        let p1 : PointBV m := writePlane A l pAcc (Nat.succ s)
+        let stNext : State n A := stateUpdate (A := A) st w
+
+        have ⟨stRec, hEmb⟩ := Embed.embedState?_activeAxes_succ_some (m := m) (s := Nat.succ s) stNext
+        have hDec' := hDec
+        simp [decodeFromLevel, A, l, p1, stNext, hEmb] at hDec'
+        have hRec : decodeFromLevel (m := m) (Nat.succ s) stRec lo p1 = some pOut := hDec'
+
+        have hjAll : j ∈ allAxes n := by simp [allAxes]
+        have hmjlt : m j < Nat.succ (Nat.succ s) := by
+          have : ¬ (Nat.succ (Nat.succ s) ≤ m j) := by
+            intro hle
+            apply hj
+            exact (ActiveAxes.mem_activeAxes_iff (m := m) (s := Nat.succ (Nat.succ s)) (j := j)).2 ⟨hjAll, hle⟩
+          exact Nat.lt_of_not_ge this
+        have hmjle : m j ≤ Nat.succ s := Nat.le_of_lt_succ hmjlt
+        have hmjCases : m j = Nat.succ s ∨ m j ≤ s := by
+          rcases Nat.eq_or_lt_of_le hmjle with hEq | hLt
+          · exact Or.inl hEq
+          · exact Or.inr (Nat.le_of_lt_succ hLt)
+        cases hmjCases with
+        | inl hmjEq =>
+            have hjRec : j ∈ activeAxes m (Nat.succ s) :=
+              (ActiveAxes.mem_activeAxes_iff (m := m) (s := Nat.succ s) (j := j)).2 ⟨hjAll, by simpa [hmjEq]⟩
+            have hAllMax : Digits.allMaxForDecode m (Nat.succ s) lo :=
+              Digits.allMaxForDecode_of_decodeFromLevel_toNat_eq_two_pow_sub_one (m := m)
+                (s := Nat.succ s) (st := stRec) (ds := lo) (pAcc := p1) (pOut := pOut) hRec hLoMax
+            have hBit :=
+              DecodeSuffix.getBit_decodeFromLevel_allMax_eq_exitCorner (m := m)
+                (s := Nat.succ s) (st := stRec) (ds := lo) (pAcc := p1) (pOut := pOut) hAllMax hRec j hjRec
+                i0 (by simpa [hmjEq] using hi0)
+
+            have hOld : A.Nodup := ActiveAxes.nodup_activeAxes (m := m) (s := Nat.succ (Nat.succ s))
+            have hNew : (activeAxes m (Nat.succ s)).Nodup := ActiveAxes.nodup_activeAxes (m := m) (s := Nat.succ s)
+            have hExitEmb :
+                State.exitCorner stRec =
+                  Embed.embedBV A (activeAxes m (Nat.succ s)) (State.exitCorner stNext) := by
+              simpa using
+                (Embed.embedState?_exitCorner_eq (Aold := A) (Anew := activeAxes m (Nat.succ s)) (hOld := hOld)
+                  (hNew := hNew) (st := stNext) (st' := stRec) hEmb)
+            have hCorner : unpackPlane (activeAxes m (Nat.succ s)) (State.exitCorner stRec) j = false := by
+              have hjOld : j ∉ A := by simpa [A] using hj
+              simpa [hExitEmb] using
+                (unpackPlane_embedBV_eq_false_of_not_mem_old (Aold := A) (Anew := activeAxes m (Nat.succ s))
+                  (x := State.exitCorner stNext) (j := j) hjOld hjRec)
+            simpa [hCorner] using hBit
+        | inr hmjLe =>
+            have hjNotRec : j ∉ activeAxes m (Nat.succ s) := by
+              intro hjMem
+              have hcond := (ActiveAxes.mem_activeAxes_iff (m := m) (s := Nat.succ s) (j := j)).1 hjMem
+              have : Nat.succ s ≤ s := Nat.le_trans hcond.2 hmjLe
+              exact (Nat.not_succ_le_self s this).elim
+            cases lo with
+            | nil =>
+                -- No digits left at this recursive level: impossible under `= some pOut`.
+                simp [decodeFromLevel] at hRec
+            | cons d2 lo2 =>
+                have hLo2 : ∀ d ∈ lo2, BV.toNat d.2 = 2 ^ d.1 - 1 := by
+                  intro d hd
+                  exact hLoMax d (by simp [hd])
+                exact ih (st := stRec) (d := d2) (lo := lo2) (pAcc := p1) (pOut := pOut) hRec hLo2 j hjNotRec i0 hi0
+      · -- width mismatch makes `decodeFromLevel` return `none`, contradicting `hDec`.
+        simp [decodeFromLevel, A, hk] at hDec
+
+private theorem getBit_decodeFromLevel_head_allZero_suffix_eq_false_of_not_mem_activeAxes
+    {n : Nat} {m : Exponents n} :
+    ∀ (s : Nat)
+      (st : State n (activeAxes m (Nat.succ s)))
+      (d : Digit) (lo : Digits)
+      (pAcc pOut : PointBV m),
+        decodeFromLevel (m := m) (Nat.succ s) st (d :: lo) pAcc = some pOut →
+        (∀ d ∈ lo, BV.toNat d.2 = 0) →
+        ∀ (j : Axis n), j ∉ activeAxes m (Nat.succ s) →
+          ∀ i0, i0 < m j → getBit (pOut j) i0 = false := by
+  intro s
+  induction s with
+  | zero =>
+      intro st d lo pAcc pOut hDec hLoZero j hj i0 hi0
+      have hjAll : j ∈ allAxes n := by simp [allAxes]
+      have hmjlt : m j < 1 := by
+        have : ¬ (1 ≤ m j) := by
+          intro hle
+          apply hj
+          exact (ActiveAxes.mem_activeAxes_iff (m := m) (s := 1) (j := j)).2 ⟨hjAll, hle⟩
+        exact Nat.lt_of_not_ge this
+      have hmj0 : m j = 0 := Nat.lt_one_iff.mp hmjlt
+      cases (Nat.not_lt_zero i0 (by simpa [hmj0] using hi0))
+  | succ s ih =>
+      intro st d lo pAcc pOut hDec hLoZero j hj i0 hi0
+      rcases d with ⟨kW, w⟩
+      let A : List (Axis n) := activeAxes m (Nat.succ (Nat.succ s))
+      by_cases hk : kW = A.length
+      · cases hk
+        let l : BV A.length := Tinv st.e st.dPos.val (BV.gc w)
+        let p1 : PointBV m := writePlane A l pAcc (Nat.succ s)
+        let stNext : State n A := stateUpdate (A := A) st w
+
+        have ⟨stRec, hEmb⟩ := Embed.embedState?_activeAxes_succ_some (m := m) (s := Nat.succ s) stNext
+        have hDec' := hDec
+        simp [decodeFromLevel, A, l, p1, stNext, hEmb] at hDec'
+        have hRec : decodeFromLevel (m := m) (Nat.succ s) stRec lo p1 = some pOut := hDec'
+
+        have hjAll : j ∈ allAxes n := by simp [allAxes]
+        have hmjlt : m j < Nat.succ (Nat.succ s) := by
+          have : ¬ (Nat.succ (Nat.succ s) ≤ m j) := by
+            intro hle
+            apply hj
+            exact (ActiveAxes.mem_activeAxes_iff (m := m) (s := Nat.succ (Nat.succ s)) (j := j)).2 ⟨hjAll, hle⟩
+          exact Nat.lt_of_not_ge this
+        have hmjle : m j ≤ Nat.succ s := Nat.le_of_lt_succ hmjlt
+        have hmjCases : m j = Nat.succ s ∨ m j ≤ s := by
+          rcases Nat.eq_or_lt_of_le hmjle with hEq | hLt
+          · exact Or.inl hEq
+          · exact Or.inr (Nat.le_of_lt_succ hLt)
+        cases hmjCases with
+        | inl hmjEq =>
+            have hjRec : j ∈ activeAxes m (Nat.succ s) :=
+              (ActiveAxes.mem_activeAxes_iff (m := m) (s := Nat.succ s) (j := j)).2 ⟨hjAll, by simpa [hmjEq]⟩
+            have hAllZero : Digits.allZeroForDecode m (Nat.succ s) lo :=
+              Digits.allZeroForDecode_of_decodeFromLevel_toNat_eq_zero (m := m)
+                (s := Nat.succ s) (st := stRec) (ds := lo) (pAcc := p1) (pOut := pOut) hRec hLoZero
+            have hBit :=
+              DecodeSuffix.getBit_decodeFromLevel_allZero_eq_entryCorner (m := m)
+                (s := Nat.succ s) (st := stRec) (ds := lo) (pAcc := p1) (pOut := pOut) hAllZero hRec j hjRec
+                i0 (by simpa [hmjEq] using hi0)
+
+            have hEntryEmb :
+                State.entryCorner stRec =
+                  Embed.embedBV A (activeAxes m (Nat.succ s)) (State.entryCorner stNext) := by
+              simpa using
+                (Embed.embedState?_entryCorner_eq (Aold := A) (Anew := activeAxes m (Nat.succ s)) (st := stNext) (st' := stRec)
+                  hEmb)
+            have hCorner : unpackPlane (activeAxes m (Nat.succ s)) (State.entryCorner stRec) j = false := by
+              have hjOld : j ∉ A := by simpa [A] using hj
+              simpa [hEntryEmb] using
+                (unpackPlane_embedBV_eq_false_of_not_mem_old (Aold := A) (Anew := activeAxes m (Nat.succ s))
+                  (x := State.entryCorner stNext) (j := j) hjOld hjRec)
+            simpa [hCorner] using hBit
+        | inr hmjLe =>
+            have hjNotRec : j ∉ activeAxes m (Nat.succ s) := by
+              intro hjMem
+              have hcond := (ActiveAxes.mem_activeAxes_iff (m := m) (s := Nat.succ s) (j := j)).1 hjMem
+              have : Nat.succ s ≤ s := Nat.le_trans hcond.2 hmjLe
+              exact (Nat.not_succ_le_self s this).elim
+            cases lo with
+            | nil =>
+                simp [decodeFromLevel] at hRec
+            | cons d2 lo2 =>
+                have hLo2 : ∀ d ∈ lo2, BV.toNat d.2 = 0 := by
+                  intro d hd
+                  exact hLoZero d (by simp [hd])
+                exact ih (st := stRec) (d := d2) (lo := lo2) (pAcc := p1) (pOut := pOut) hRec hLo2 j hjNotRec i0 hi0
+      · simp [decodeFromLevel, A, hk] at hDec
+
+/-!
 ### Seam unit-step lemma (core of Theorem 5.4)
 
 This is the “carry → dyadic boundary unit step” statement used at the pivot level:
@@ -715,6 +930,781 @@ decoding a head digit `w` with an all-max suffix gives the exit corner of child 
 decoding `w+1` with an all-zero suffix gives the entry corner of child `w+1`,
 and the resulting lattice points are `L¹`-neighbors.
 -/
+
+private theorem seam_unit_step_of_decodeFromLevel_succDigit
+    {n : Nat} {m : Exponents n}
+    (s : Nat)
+    (st : State n (activeAxes m (Nat.succ s)))
+    (d : Digit) (lo : Digits)
+    (pAcc pOut₁ pOut₂ : PointBV m)
+    (hDec₁ : decodeFromLevel (m := m) (Nat.succ s) st (d :: lo) pAcc = some pOut₁)
+    (hDec₂ :
+      decodeFromLevel (m := m) (Nat.succ s) st
+          ((Digits.succDigit d).1 :: (lo.map Digits.zeroLike)) pAcc =
+        some pOut₂)
+    (hCarry : (Digits.succDigit d).2 = false)
+    (hLoMax : ∀ d ∈ lo, BV.toNat d.2 = 2 ^ d.1 - 1) :
+    l1Dist pOut₁ pOut₂ = 1 := by
+  classical
+  rcases d with ⟨kW, w⟩
+  let A : List (Axis n) := activeAxes m (Nat.succ s)
+
+  -- Width match forced by successful decoding.
+  have hkW : kW = A.length := by
+    by_contra hne
+    have hNone : decodeFromLevel (m := m) (Nat.succ s) st (⟨kW, w⟩ :: lo) pAcc = none := by
+      simp [decodeFromLevel, A, hne]
+    have : (none : Option (PointBV m)) = some pOut₁ := by
+      simpa [hNone] using hDec₁
+    exact Option.noConfusion this
+  cases hkW
+
+  let k : Nat := A.length
+  have hk : 0 < k := State.length_pos st
+  let i : Nat := BV.toNat w
+  have hwOfNat : BV.ofNat (k := k) i = w := by
+    simpa [i] using (BV.ofNat_toNat (x := w))
+
+  have hCarryW : (Digits.succDigit ⟨k, w⟩).2 = false := by
+    simpa [A, k] using hCarry
+  have ht : tsb i < k := by
+    simpa [i] using (Digits.succDigit_carry_false_imp_tsb_lt (d := ⟨k, w⟩) hCarryW)
+  let t : Fin k := ⟨tsb i, ht⟩
+  let r : Nat := st.dPos.val.succ
+  let g : Fin k := ⟨(t.val + r) % k, Nat.mod_lt _ hk⟩
+  let ax : Axis n := A.get g
+
+  -- Normalize head digits into `ofNat` form so we can use the head-XOR bridge lemma.
+  have hSuccHead :
+      (Digits.succDigit ⟨k, w⟩).1 = ⟨k, BV.ofNat (k := k) i.succ⟩ := by
+    simpa [i] using (Digits.succDigit_eq_ofNat_succ_of_carry_false (d := ⟨k, w⟩) hCarryW)
+  have hDec₁' :
+      decodeFromLevel (m := m) (Nat.succ s) st (⟨k, BV.ofNat (k := k) i⟩ :: lo) pAcc = some pOut₁ := by
+    simpa [hwOfNat] using hDec₁
+  have hDec₂' :
+      decodeFromLevel (m := m) (Nat.succ s) st
+          (⟨k, BV.ofNat (k := k) i.succ⟩ :: (lo.map Digits.zeroLike)) pAcc =
+        some pOut₂ := by
+    -- Rewrite the successor head digit out of `succDigit`.
+    simpa [hSuccHead, k] using (hDec₂ : decodeFromLevel (m := m) (Nat.succ s) st
+      ((Digits.succDigit ⟨k, w⟩).1 :: (lo.map Digits.zeroLike)) pAcc = some pOut₂)
+
+  -- Plane XOR at the head level is a rotated one-hot at `tsb i`.
+  have hXorPlaneRaw :
+      BV.xor (packPlane A pOut₁ s) (packPlane A pOut₂ s) =
+        BV.rotL (k := k) r (BV.oneHotFin t) := by
+    simpa [A, k, i, r, t] using
+      (DecodeHeadXor.packPlane_xor_decodeFromLevel_ofNat_succ_heads (m := m)
+        (s := s) (st := st) (i := i)
+        (rest₁ := lo) (rest₂ := lo.map Digits.zeroLike)
+        (pAcc := pAcc) (pOut₁ := pOut₁) (pOut₂ := pOut₂)
+        hDec₁' hDec₂' ht)
+  have hRotOneHot : BV.rotL (k := k) r (BV.oneHotFin t) = BV.oneHotFin g := by
+    simpa [g, r, t] using (BV.rotL_oneHotFin_eq_of_pos (k := k) hk r t)
+  have hXorPlane :
+      BV.xor (packPlane A pOut₁ s) (packPlane A pOut₂ s) = BV.oneHotFin g :=
+    hXorPlaneRaw.trans hRotOneHot
+
+  -- Active-axis facts for the seam axis.
+  have hAxMem : ax ∈ A := ListLemmas.get_mem (xs := A) g
+  have hAxActive :
+      Nat.succ s ≤ m ax := (ActiveAxes.mem_activeAxes_iff (m := m) (s := Nat.succ s) (j := ax)).1 hAxMem |>.2
+  have hsAx : s < m ax := Nat.lt_of_lt_of_le (Nat.lt_succ_self s) hAxActive
+  have hposAx : pos? A ax = some g := by
+    have hnd : A.Nodup := ActiveAxes.nodup_activeAxes (m := m) (s := Nat.succ s)
+    simpa [ax] using (Pos.pos?_get_of_nodup (xs := A) hnd g)
+
+  -- Name the two head-plane bits on the seam axis.
+  let b₁ : Bool := getBit (pOut₁ ax) s
+  let b₂ : Bool := getBit (pOut₂ ax) s
+
+  have hb₁ : b₁ = (packPlane A pOut₁ s) g := by
+    simp [b₁, ax, packPlane]
+  have hb₂ : b₂ = (packPlane A pOut₂ s) g := by
+    simp [b₂, ax, packPlane]
+  have hDiffPlane : BV.bxor b₁ b₂ = true := by
+    have hAt := congrArg (fun w => w g) hXorPlane
+    simpa [BV.xor, BV.oneHotFin, hb₁, hb₂] using hAt
+  have hb₂_eq_not : b₂ = (!b₁) := by
+    cases hb₁v : b₁ <;> cases hb₂v : b₂ <;> simp [BV.bxor, hb₁v, hb₂v] at hDiffPlane <;> simp [hb₁v, hb₂v]
+
+  -- Child states `st₁` and `st₂` at the pivot level.
+  set st₁ : State n A := stateUpdate A st w with hst₁
+  set st₂ : State n A := stateUpdate A st (BV.ofNat (k := k) i.succ) with hst₂
+
+  -- `toNat (ofNat i.succ) = i.succ` since `succDigit` does not overflow.
+  have hiSucc : i.succ < 2 ^ k := by
+    have hlt : i.succ < Digits.base k := by
+      simpa [Digits.base, i] using
+        (Digits.succDigit_carry_false_imp_toNat_succ_lt_base (d := ⟨k, w⟩) hCarryW)
+    simpa [Digits.base, Nat.shiftLeft_eq] using hlt
+  have hToNatSucc : BV.toNat (BV.ofNat (k := k) i.succ) = i.succ :=
+    toNat_ofNat_eq_of_lt (k := k) (n := i.succ) hiSucc
+
+  -- Entry-bit alignment: the entry-corner bit of `st₂` at `g` matches the decoded plane bit `b₁`.
+  have hEntryBit : st₂.e g = b₁ := by
+    have hTinv :
+        Tinv st.e st.dPos.val (BV.gc w) = BV.xor st.e (BV.rotL (k := k) r (BV.gc w)) := by
+      simpa [Tinv, r] using (BV.xor_comm (BV.rotL (k := k) r (BV.gc w)) st.e)
+    have hst₂e : st₂.e = BV.xor st.e (BV.rotL (k := k) r (childEntry k i.succ)) := by
+      simp [hst₂, stateUpdate, i, k, hToNatSucc, r, State.mk']
+    have hRotEq :
+        (BV.rotL (k := k) r (childEntry k i.succ)) g = (BV.rotL (k := k) r (BV.gc w)) g := by
+      have h1 : (BV.rotL (k := k) r (childEntry k i.succ)) g = (childEntry k i.succ) t := by
+        simpa [g, t] using (rotL_apply_at_add_mod (k := k) hk r t (childEntry k i.succ))
+      have h2 : (BV.rotL (k := k) r (BV.gc w)) g = (BV.gc w) t := by
+        simpa [g, t] using (rotL_apply_at_add_mod (k := k) hk r t (BV.gc w))
+      have hChild : (childEntry k i.succ) t = (BV.gc w) t := by
+        have := childEntry_succ_get_tsb_eq_gc_get_tsb (k := k) hk i ht
+        simpa [t, i, hwOfNat] using this
+      exact h1.trans (hChild.trans h2.symm)
+
+    have hPlane₁ :
+        packPlane A pOut₁ s = Tinv st.e st.dPos.val (BV.gc w) := by
+      have h :=
+        (DecodeHead.packPlane_decodeFromLevel_head (m := m) (s := s) (st := st)
+          (w := BV.ofNat (k := k) i) (rest := lo) (pAcc := pAcc) (pOut := pOut₁) hDec₁')
+      simpa [A, k, hwOfNat] using h
+    have hb₁' : b₁ = (Tinv st.e st.dPos.val (BV.gc w)) g := by
+      have : (packPlane A pOut₁ s) g = (Tinv st.e st.dPos.val (BV.gc w)) g := by
+        simpa using congrArg (fun l => l g) hPlane₁
+      simpa [b₁, hb₁] using this
+
+    calc
+      st₂.e g = (BV.xor st.e (BV.rotL (k := k) r (childEntry k i.succ))) g := by simpa [hst₂e]
+      _ = BV.bxor (st.e g) ((BV.rotL (k := k) r (childEntry k i.succ)) g) := by rfl
+      _ = BV.bxor (st.e g) ((BV.rotL (k := k) r (BV.gc w)) g) := by simpa [hRotEq]
+      _ = (BV.xor st.e (BV.rotL (k := k) r (BV.gc w))) g := by rfl
+      _ = (Tinv st.e st.dPos.val (BV.gc w)) g := by simpa [hTinv]
+      _ = b₁ := by simpa [hb₁'] using rfl
+
+  -- Glue: `entryCorner st₂ = exitCorner st₁ XOR oneHot g`.
+  have hGlue : st₂.e = BV.xor (State.exitCorner st₁) (BV.oneHotFin g) := by
+    have h := lemma_5_2 (st := st) (w := w) ht
+    have hRot : BV.rotL (k := k) r (BV.oneHotFin t) = BV.oneHotFin g := hRotOneHot
+    -- `lemma_5_2` yields the glue equation with a rotated one-hot at `tsb i`;
+    -- rewrite it to the concrete seam index `g`.
+    simpa [hst₁, hst₂, State.exitCorner, hRot, i, k, A, t, r] using h
+
+  have hExitBit : (State.exitCorner st₁) g = (!b₁) := by
+    have hAt := congrArg (fun w => w g) hGlue
+    -- `hAt` says `b₁ = exitCornerBit XOR true`, so the exit bit is `!b₁`.
+    have hAt' : b₁ = BV.bxor ((State.exitCorner st₁) g) true := by
+      simpa [BV.xor, BV.oneHotFin, hEntryBit] using hAt
+    cases hb : b₁ <;> cases hx : (State.exitCorner st₁) g <;> simp [BV.bxor, hb, hx] at hAt' <;> simp [hb, hx]
+
+  -- Low-bit values below plane `s` on the seam axis.
+  have hLowBits₁ : ∀ i0, i0 < s → getBit (pOut₁ ax) i0 = (State.exitCorner st₁) g := by
+    intro i0 hi0
+    have hBit :=
+      getBit_decodeFromLevel_head_allMax_suffix_eq_exitCorner (m := m)
+        (s := s) (st := st) (w := w) (lo := lo) (pAcc := pAcc) (pOut := pOut₁) (by simpa [A] using hDec₁)
+        hLoMax ax hAxMem i0 hi0
+    simpa [A, unpackPlane, hposAx, hst₁, State.exitCorner] using hBit
+  have hLoZero : ∀ d ∈ lo.map Digits.zeroLike, BV.toNat d.2 = 0 := by
+    intro d hd
+    rcases List.mem_map.mp hd with ⟨d0, hd0, rfl⟩
+    simp [Digits.zeroLike, BV.toNat, BV.zero]
+  have hLowBits₂ : ∀ i0, i0 < s → getBit (pOut₂ ax) i0 = st₂.e g := by
+    intro i0 hi0
+    have hBit :=
+      getBit_decodeFromLevel_head_allZero_suffix_eq_entryCorner (m := m)
+        (s := s) (st := st) (w := BV.ofNat (k := k) i.succ) (lo := lo.map Digits.zeroLike)
+        (pAcc := pAcc) (pOut := pOut₂) (by simpa [A] using hDec₂') hLoZero ax hAxMem i0 hi0
+    simpa [A, unpackPlane, hposAx, State.entryCorner, hst₂] using hBit
+
+  -- Other axes are equal (as naturals) because only the seam axis changes.
+  have hEqOther : ∀ j : Axis n, j ≠ ax → pointToNat pOut₁ j = pointToNat pOut₂ j := by
+    intro j hjAx
+    have hEqBV : pOut₁ j = pOut₂ j := by
+      funext tFin
+      by_cases hjA : j ∈ A
+      · by_cases hge : Nat.succ s ≤ tFin.val
+        · have hPres₁ :
+              pOut₁ j tFin = pAcc j tFin :=
+            DecodePlanes.decodeFromLevel_preserves_ge (m := m)
+              (s := Nat.succ s) (st := st) (ds := ⟨k, w⟩ :: lo)
+              (pAcc := pAcc) (pOut := pOut₁) (by simpa [A] using hDec₁)
+              (j := j) (t := tFin) hge
+          have hPres₂ :
+              pOut₂ j tFin = pAcc j tFin :=
+            DecodePlanes.decodeFromLevel_preserves_ge (m := m)
+              (s := Nat.succ s) (st := st) (ds := (Digits.succDigit ⟨k, w⟩).1 :: lo.map Digits.zeroLike)
+              (pAcc := pAcc) (pOut := pOut₂) (by simpa [A] using hDec₂)
+              (j := j) (t := tFin) hge
+          simpa [hPres₁, hPres₂]
+        · have htlt : tFin.val < Nat.succ s := Nat.lt_of_not_ge hge
+          have htle : tFin.val ≤ s := Nat.lt_succ_iff.mp htlt
+          cases lt_or_eq_of_le htle with
+          | inl htltS =>
+              have hCornerEq :
+                  unpackPlane A (State.exitCorner st₁) j = unpackPlane A (State.entryCorner st₂) j := by
+                rcases Pos.pos?_some_of_mem (xs := A) (a := j) hjA with ⟨tj, htj⟩
+                have hget : A.get tj = j := Pos.get_of_pos?_some (xs := A) (a := j) (i := tj) htj
+                have htjNe : tj ≠ g := by
+                  intro hEq
+                  apply hjAx
+                  have : j = ax := by simpa [ax, hEq] using hget.symm
+                  simpa [this]
+                have honeHot : (BV.oneHotFin g) tj = false := by
+                  simp [BV.oneHotFin, htjNe]
+                have hAt : unpackPlane A st₂.e j = unpackPlane A (State.exitCorner st₁) j := by
+                  have hEq := congrArg (fun l => l tj) hGlue
+                  have hL : unpackPlane A st₂.e j = st₂.e tj := by simp [unpackPlane, htj]
+                  have hR : unpackPlane A (State.exitCorner st₁) j = (State.exitCorner st₁) tj := by simp [unpackPlane, htj]
+                  have hX : st₂.e tj = (State.exitCorner st₁) tj := by
+                    -- At indices `tj ≠ g`, the one-hot bit is `false`, so the XOR is unchanged.
+                    simpa [BV.xor, BV.oneHotFin, htjNe, BV.bxor] using hEq
+                  simpa [hL, hR] using hX
+                simpa [State.entryCorner] using hAt.symm
+
+              have hLow₁ : getBit (pOut₁ j) tFin.val = unpackPlane A (State.exitCorner st₁) j :=
+                getBit_decodeFromLevel_head_allMax_suffix_eq_exitCorner (m := m)
+                  (s := s) (st := st) (w := w) (lo := lo) (pAcc := pAcc) (pOut := pOut₁) (by simpa [A] using hDec₁)
+                  hLoMax j hjA tFin.val htltS
+              have hLow₂ : getBit (pOut₂ j) tFin.val = unpackPlane A (State.entryCorner st₂) j :=
+                getBit_decodeFromLevel_head_allZero_suffix_eq_entryCorner (m := m)
+                  (s := s) (st := st) (w := BV.ofNat (k := k) i.succ) (lo := lo.map Digits.zeroLike) (pAcc := pAcc) (pOut := pOut₂)
+                  (by simpa [A] using hDec₂') hLoZero j hjA tFin.val htltS
+              have hbit₁ : pOut₁ j tFin = unpackPlane A (State.exitCorner st₁) j := by
+                simpa [getBit, tFin.isLt] using hLow₁
+              have hbit₂ : pOut₂ j tFin = unpackPlane A (State.entryCorner st₂) j := by
+                simpa [getBit, tFin.isLt] using hLow₂
+              simpa [hbit₁, hbit₂, hCornerEq]
+          | inr hteq =>
+              rcases Pos.pos?_some_of_mem (xs := A) (a := j) hjA with ⟨tj, htj⟩
+              have hget : A.get tj = j := Pos.get_of_pos?_some (xs := A) (a := j) (i := tj) htj
+              have htjNe : tj ≠ g := by
+                intro hEq
+                apply hjAx
+                have : j = ax := by simpa [ax, hEq] using hget.symm
+                simpa [this]
+              have hAt := congrArg (fun l => l tj) hXorPlane
+              have hbxor :
+                  BV.bxor ((packPlane A pOut₁ s) tj) ((packPlane A pOut₂ s) tj) = false := by
+                simpa [BV.xor, BV.oneHotFin, htjNe] using hAt
+              have hEqPlane : (packPlane A pOut₁ s) tj = (packPlane A pOut₂ s) tj := by
+                cases h1 : (packPlane A pOut₁ s) tj <;> cases h2 : (packPlane A pOut₂ s) tj <;>
+                  simp [BV.bxor, h1, h2] at hbxor <;> simp [h1, h2]
+              have hBit₁ : getBit (pOut₁ j) s = (packPlane A pOut₁ s) tj := by
+                have : (packPlane A pOut₁ s) tj = getBit (pOut₁ j) s := by
+                  -- `packPlane` at `tj` reads axis `A.get tj`, and `A.get tj = j`.
+                  -- `simp` normalizes `A.get tj` to the bracket form `A[tj.1]`.
+                  have hget' : A[tj.1] = j := by simpa using hget
+                  have : getBit (pOut₁ A[tj.1]) s = getBit (pOut₁ j) s := by
+                    -- rewrite the axis index inside `pOut₁`
+                    -- (avoid relying on simp to close the reflexive goal)
+                    rw [hget']
+                  simpa [packPlane] using this
+                exact this.symm
+              have hBit₂ : getBit (pOut₂ j) s = (packPlane A pOut₂ s) tj := by
+                have : (packPlane A pOut₂ s) tj = getBit (pOut₂ j) s := by
+                  have hget' : A[tj.1] = j := by simpa using hget
+                  have : getBit (pOut₂ A[tj.1]) s = getBit (pOut₂ j) s := by
+                    rw [hget']
+                  simpa [packPlane] using this
+                exact this.symm
+              have hBits : getBit (pOut₁ j) s = getBit (pOut₂ j) s := by
+                simpa [hBit₁, hBit₂] using hEqPlane
+              have hBits' : getBit (pOut₁ j) tFin.val = getBit (pOut₂ j) tFin.val := by
+                -- rewrite `s` into `tFin.val`
+                simpa [hteq.symm] using hBits
+              simpa [getBit, tFin.isLt] using hBits'
+      · have hZero₁ :
+            getBit (pOut₁ j) tFin.val = false :=
+          getBit_decodeFromLevel_head_allMax_suffix_eq_false_of_not_mem_activeAxes (m := m)
+            (s := s) (st := st) (d := ⟨k, w⟩) (lo := lo) (pAcc := pAcc) (pOut := pOut₁) (by simpa [A] using hDec₁)
+            hLoMax j hjA tFin.val tFin.isLt
+        have hZero₂ :
+            getBit (pOut₂ j) tFin.val = false :=
+          getBit_decodeFromLevel_head_allZero_suffix_eq_false_of_not_mem_activeAxes (m := m)
+            (s := s) (st := st) (d := ⟨k, BV.ofNat (k := k) i.succ⟩) (lo := lo.map Digits.zeroLike) (pAcc := pAcc) (pOut := pOut₂)
+            (by simpa [A] using hDec₂') hLoZero j hjA tFin.val tFin.isLt
+        have hbit₁ : pOut₁ j tFin = false := by
+          simpa [getBit, tFin.isLt] using hZero₁
+        have hbit₂ : pOut₂ j tFin = false := by
+          simpa [getBit, tFin.isLt] using hZero₂
+        simpa [hbit₁, hbit₂]
+    simpa [pointToNat] using congrArg BV.toNat hEqBV
+
+  -- Choose low/high ordering by inspecting the seam plane bit.
+  by_cases hb : b₁ = false
+  · have hb2 : b₂ = true := by simpa [hb, hb₂_eq_not]
+    have hLowOnes : ∀ i0, i0 < s → getBit (pOut₁ ax) i0 = true := by
+      intro i0 hi0
+      have := hLowBits₁ i0 hi0
+      simpa [hExitBit, hb] using this
+    have hHighZeros : ∀ i0, i0 < s → getBit (pOut₂ ax) i0 = false := by
+      intro i0 hi0
+      have := hLowBits₂ i0 hi0
+      simpa [hEntryBit, hb] using this
+
+    have hxmod : pointToNat pOut₁ ax % 2 ^ (Nat.succ s) = 2 ^ s - 1 := by
+      apply Nat.eq_of_testBit_eq
+      intro j
+      by_cases hj : j < Nat.succ s
+      · have hj' : j < m ax := lt_of_lt_of_le hj hAxActive
+        have hx : Nat.testBit (pointToNat pOut₁ ax) j = getBit (pOut₁ ax) j :=
+          testBit_pointToNat_eq_getBit (p := pOut₁) (j := ax) (i := j) hj'
+        by_cases hjs : j < s
+        · have hgb : getBit (pOut₁ ax) j = true := hLowOnes j hjs
+          simp [Nat.testBit_mod_two_pow, hj, hx, hgb, Nat.testBit_two_pow_sub_one, hjs]
+        · have hjs' : j = s := Nat.eq_of_lt_succ_of_not_lt hj hjs
+          cases hjs'
+          have hgb : getBit (pOut₁ ax) s = false := by simpa [b₁] using hb
+          have hns : ¬ s < s := Nat.lt_irrefl s
+          simp [Nat.testBit_mod_two_pow, hj, hx, hgb, Nat.testBit_two_pow_sub_one, hns]
+      · have hjs : ¬ j < s := by
+          intro hlt
+          exact hj (Nat.lt_trans hlt (Nat.lt_succ_self s))
+        simp [Nat.testBit_mod_two_pow, hj, Nat.testBit_two_pow_sub_one, hjs]
+
+    have hymod : pointToNat pOut₂ ax % 2 ^ (Nat.succ s) = 2 ^ s := by
+      apply Nat.eq_of_testBit_eq
+      intro j
+      by_cases hj : j < Nat.succ s
+      · have hj' : j < m ax := lt_of_lt_of_le hj hAxActive
+        have hy : Nat.testBit (pointToNat pOut₂ ax) j = getBit (pOut₂ ax) j :=
+          testBit_pointToNat_eq_getBit (p := pOut₂) (j := ax) (i := j) hj'
+        by_cases hjs : j < s
+        · have hgb : getBit (pOut₂ ax) j = false := hHighZeros j hjs
+          have hne : j ≠ s := Nat.ne_of_lt hjs
+          have hsne : s ≠ j := by
+            intro hEq
+            exact hne hEq.symm
+          simp [Nat.testBit_mod_two_pow, hj, hy, hgb, Nat.testBit_two_pow, hsne]
+        · have hjs' : j = s := Nat.eq_of_lt_succ_of_not_lt hj hjs
+          cases hjs'
+          have hgb : getBit (pOut₂ ax) s = true := by simpa [b₂] using hb2
+          simp [Nat.testBit_mod_two_pow, hj, hy, hgb, Nat.testBit_two_pow]
+      · have hsne : s ≠ j := by
+          intro hEq
+          apply hj
+          simpa [hEq] using (Nat.lt_succ_self s)
+        simp [Nat.testBit_mod_two_pow, hj, Nat.testBit_two_pow, hsne]
+
+    have hdiv :
+        pointToNat pOut₁ ax / 2 ^ (Nat.succ s) = pointToNat pOut₂ ax / 2 ^ (Nat.succ s) := by
+      apply Nat.eq_of_testBit_eq
+      intro j
+      have hx := Nat.testBit_div_two_pow (n := Nat.succ s) (x := pointToNat pOut₁ ax) (i := j)
+      have hy := Nat.testBit_div_two_pow (n := Nat.succ s) (x := pointToNat pOut₂ ax) (i := j)
+      have hj1 : Nat.succ s + j < m ax ∨ m ax ≤ Nat.succ s + j := lt_or_ge (Nat.succ s + j) (m ax)
+      cases hj1 with
+      | inl hjlt =>
+          let tFin : Fin (m ax) := ⟨Nat.succ s + j, hjlt⟩
+          have hPres₁ :
+              pOut₁ ax tFin = pAcc ax tFin :=
+            DecodePlanes.decodeFromLevel_preserves_ge (m := m)
+              (s := Nat.succ s) (st := st) (ds := ⟨k, w⟩ :: lo) (pAcc := pAcc) (pOut := pOut₁) (by simpa [A] using hDec₁)
+              (j := ax) (t := tFin) (Nat.le_add_right _ _)
+          have hPres₂ :
+              pOut₂ ax tFin = pAcc ax tFin :=
+            DecodePlanes.decodeFromLevel_preserves_ge (m := m)
+              (s := Nat.succ s) (st := st) (ds := (Digits.succDigit ⟨k, w⟩).1 :: lo.map Digits.zeroLike) (pAcc := pAcc)
+              (pOut := pOut₂) (by simpa [A] using hDec₂) (j := ax) (t := tFin) (Nat.le_add_right _ _)
+          have hxBit : Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) = pAcc ax tFin := by
+            have hx' : Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) = pOut₁ ax tFin := by
+              simpa [pointToNat, BV.ofNat] using
+                congrArg (fun (v : BV (m ax)) => v tFin) (BV.ofNat_toNat (x := pOut₁ ax))
+            simpa [hx', hPres₁]
+          have hyBit : Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) = pAcc ax tFin := by
+            have hy' : Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) = pOut₂ ax tFin := by
+              simpa [pointToNat, BV.ofNat] using
+                congrArg (fun (v : BV (m ax)) => v tFin) (BV.ofNat_toNat (x := pOut₂ ax))
+            simpa [hy', hPres₂]
+          have hxShift :
+              Nat.testBit (pointToNat pOut₁ ax / 2 ^ (Nat.succ s)) j =
+                Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) := by
+            simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hx
+          have hyShift :
+              Nat.testBit (pointToNat pOut₂ ax / 2 ^ (Nat.succ s)) j =
+                Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) := by
+            simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hy
+          have hEqHi :
+              Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) =
+                Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) := by
+            calc
+              Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) = pAcc ax tFin := hxBit
+              _ = Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) := by
+                simpa using hyBit.symm
+          calc
+            Nat.testBit (pointToNat pOut₁ ax / 2 ^ (Nat.succ s)) j =
+                Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) := hxShift
+            _ = Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) := hEqHi
+            _ = Nat.testBit (pointToNat pOut₂ ax / 2 ^ (Nat.succ s)) j := by
+              simpa using hyShift.symm
+      | inr hjge =>
+          have hlt₁ : pointToNat pOut₁ ax < 2 ^ (m ax) := by
+            simpa [pointToNat, Nat.shiftLeft_eq] using (BV.toNat_lt_shiftLeft_one (x := pOut₁ ax))
+          have hlt₂ : pointToNat pOut₂ ax < 2 ^ (m ax) := by
+            simpa [pointToNat, Nat.shiftLeft_eq] using (BV.toNat_lt_shiftLeft_one (x := pOut₂ ax))
+          have hpow : 2 ^ (m ax) ≤ 2 ^ (Nat.succ s + j) :=
+            Nat.pow_le_pow_right (by decide : 0 < (2 : Nat)) hjge
+          have hlt₁' : pointToNat pOut₁ ax < 2 ^ (Nat.succ s + j) := lt_of_lt_of_le hlt₁ hpow
+          have hlt₂' : pointToNat pOut₂ ax < 2 ^ (Nat.succ s + j) := lt_of_lt_of_le hlt₂ hpow
+          have hxBit : Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) = false :=
+            Nat.testBit_eq_false_of_lt hlt₁'
+          have hyBit : Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) = false :=
+            Nat.testBit_eq_false_of_lt hlt₂'
+          have hxShift :
+              Nat.testBit (pointToNat pOut₁ ax / 2 ^ (Nat.succ s)) j =
+                Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) := by
+            simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hx
+          have hyShift :
+              Nat.testBit (pointToNat pOut₂ ax / 2 ^ (Nat.succ s)) j =
+                Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) := by
+            simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hy
+          have hEqHi :
+              Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) =
+                Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) := by
+            calc
+              Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) = false := hxBit
+              _ = Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) := by
+                simpa using hyBit.symm
+          calc
+            Nat.testBit (pointToNat pOut₁ ax / 2 ^ (Nat.succ s)) j =
+                Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) := hxShift
+            _ = Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) := hEqHi
+            _ = Nat.testBit (pointToNat pOut₂ ax / 2 ^ (Nat.succ s)) j := by
+              simpa using hyShift.symm
+
+    set a : Nat := pointToNat pOut₁ ax / 2 ^ (Nat.succ s)
+    have hgLow : pointToNat pOut₁ ax = a * 2 ^ (Nat.succ s) + (2 ^ s - 1) := by
+      have h := (Nat.div_add_mod' (pointToNat pOut₁ ax) (2 ^ (Nat.succ s))).symm
+      simpa [a, hxmod, Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc, Nat.add_assoc] using h
+    have hgHigh : pointToNat pOut₂ ax = a * 2 ^ (Nat.succ s) + 2 ^ s := by
+      have h := (Nat.div_add_mod' (pointToNat pOut₂ ax) (2 ^ (Nat.succ s))).symm
+      simpa [a, hdiv, hymod, Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc, Nat.add_assoc] using h
+
+    exact lemma_5_3 (m := m) (g := ax) (s := Nat.succ s) (a := a) (hs := Nat.succ_pos s)
+      (pLow := pOut₁) (pHigh := pOut₂) hgLow hgHigh hEqOther
+  · have hb1 : b₁ = true := by
+      cases hb1' : b₁ <;> simp [hb1'] at hb <;> simp [hb1']
+    have hb2 : b₂ = false := by
+      simpa [hb1, hb₂_eq_not]
+    have hLowOnes : ∀ i0, i0 < s → getBit (pOut₂ ax) i0 = true := by
+      intro i0 hi0
+      have := hLowBits₂ i0 hi0
+      simpa [hEntryBit, hb1] using this
+    have hHighZeros : ∀ i0, i0 < s → getBit (pOut₁ ax) i0 = false := by
+      intro i0 hi0
+      have := hLowBits₁ i0 hi0
+      simpa [hExitBit, hb1] using this
+
+    have hxmod : pointToNat pOut₂ ax % 2 ^ (Nat.succ s) = 2 ^ s - 1 := by
+      apply Nat.eq_of_testBit_eq
+      intro j
+      by_cases hj : j < Nat.succ s
+      · have hj' : j < m ax := lt_of_lt_of_le hj hAxActive
+        have hx : Nat.testBit (pointToNat pOut₂ ax) j = getBit (pOut₂ ax) j :=
+          testBit_pointToNat_eq_getBit (p := pOut₂) (j := ax) (i := j) hj'
+        by_cases hjs : j < s
+        · have hgb : getBit (pOut₂ ax) j = true := hLowOnes j hjs
+          simp [Nat.testBit_mod_two_pow, hj, hx, hgb, Nat.testBit_two_pow_sub_one, hjs]
+        · have hjs' : j = s := Nat.eq_of_lt_succ_of_not_lt hj hjs
+          cases hjs'
+          have hgb : getBit (pOut₂ ax) s = false := by simpa [b₂] using hb2
+          have hns : ¬ s < s := Nat.lt_irrefl s
+          simp [Nat.testBit_mod_two_pow, hj, hx, hgb, Nat.testBit_two_pow_sub_one, hns]
+      · have hjs : ¬ j < s := by
+          intro hlt
+          exact hj (Nat.lt_trans hlt (Nat.lt_succ_self s))
+        simp [Nat.testBit_mod_two_pow, hj, Nat.testBit_two_pow_sub_one, hjs]
+
+    have hymod : pointToNat pOut₁ ax % 2 ^ (Nat.succ s) = 2 ^ s := by
+      apply Nat.eq_of_testBit_eq
+      intro j
+      by_cases hj : j < Nat.succ s
+      · have hj' : j < m ax := lt_of_lt_of_le hj hAxActive
+        have hy : Nat.testBit (pointToNat pOut₁ ax) j = getBit (pOut₁ ax) j :=
+          testBit_pointToNat_eq_getBit (p := pOut₁) (j := ax) (i := j) hj'
+        by_cases hjs : j < s
+        · have hgb : getBit (pOut₁ ax) j = false := hHighZeros j hjs
+          have hne : j ≠ s := Nat.ne_of_lt hjs
+          have hsne : s ≠ j := by
+            intro hEq
+            exact hne hEq.symm
+          simp [Nat.testBit_mod_two_pow, hj, hy, hgb, Nat.testBit_two_pow, hsne]
+        · have hjs' : j = s := Nat.eq_of_lt_succ_of_not_lt hj hjs
+          cases hjs'
+          have hgb : getBit (pOut₁ ax) s = true := by simpa [b₁] using hb1
+          simp [Nat.testBit_mod_two_pow, hj, hy, hgb, Nat.testBit_two_pow]
+      · have hne : j ≠ s := by
+          intro hEq
+          apply hj
+          simpa [hEq] using (Nat.lt_succ_self s)
+        have hsne : s ≠ j := by
+          intro hEq
+          exact hne hEq.symm
+        simp [Nat.testBit_mod_two_pow, hj, Nat.testBit_two_pow, hsne]
+
+    have hdiv :
+        pointToNat pOut₂ ax / 2 ^ (Nat.succ s) = pointToNat pOut₁ ax / 2 ^ (Nat.succ s) := by
+      -- Same high-plane argument as above, just swapping roles.
+      apply Nat.eq_of_testBit_eq
+      intro j
+      have hx := Nat.testBit_div_two_pow (n := Nat.succ s) (x := pointToNat pOut₂ ax) (i := j)
+      have hy := Nat.testBit_div_two_pow (n := Nat.succ s) (x := pointToNat pOut₁ ax) (i := j)
+      have hj1 : Nat.succ s + j < m ax ∨ m ax ≤ Nat.succ s + j := lt_or_ge (Nat.succ s + j) (m ax)
+      cases hj1 with
+      | inl hjlt =>
+          let tFin : Fin (m ax) := ⟨Nat.succ s + j, hjlt⟩
+          have hPres₁ :
+              pOut₂ ax tFin = pAcc ax tFin :=
+            DecodePlanes.decodeFromLevel_preserves_ge (m := m)
+              (s := Nat.succ s) (st := st) (ds := ⟨k, BV.ofNat (k := k) i.succ⟩ :: lo.map Digits.zeroLike) (pAcc := pAcc)
+              (pOut := pOut₂) (by simpa [A] using hDec₂') (j := ax) (t := tFin) (Nat.le_add_right _ _)
+          have hPres₂ :
+              pOut₁ ax tFin = pAcc ax tFin :=
+            DecodePlanes.decodeFromLevel_preserves_ge (m := m)
+              (s := Nat.succ s) (st := st) (ds := ⟨k, w⟩ :: lo) (pAcc := pAcc)
+              (pOut := pOut₁) (by simpa [A] using hDec₁) (j := ax) (t := tFin) (Nat.le_add_right _ _)
+          have hxBit : Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) = pAcc ax tFin := by
+            have hx' : Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) = pOut₂ ax tFin := by
+              simpa [pointToNat, BV.ofNat] using
+                congrArg (fun (v : BV (m ax)) => v tFin) (BV.ofNat_toNat (x := pOut₂ ax))
+            simpa [hx', hPres₁]
+          have hyBit : Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) = pAcc ax tFin := by
+            have hy' : Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) = pOut₁ ax tFin := by
+              simpa [pointToNat, BV.ofNat] using
+                congrArg (fun (v : BV (m ax)) => v tFin) (BV.ofNat_toNat (x := pOut₁ ax))
+            simpa [hy', hPres₂]
+          have hxShift :
+              Nat.testBit (pointToNat pOut₂ ax / 2 ^ (Nat.succ s)) j =
+                Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) := by
+            simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hx
+          have hyShift :
+              Nat.testBit (pointToNat pOut₁ ax / 2 ^ (Nat.succ s)) j =
+                Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) := by
+            simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hy
+          have hEqHi :
+              Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) =
+                Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) := by
+            calc
+              Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) = pAcc ax tFin := hxBit
+              _ = Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) := by
+                simpa using hyBit.symm
+          calc
+            Nat.testBit (pointToNat pOut₂ ax / 2 ^ (Nat.succ s)) j =
+                Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) := hxShift
+            _ = Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) := hEqHi
+            _ = Nat.testBit (pointToNat pOut₁ ax / 2 ^ (Nat.succ s)) j := by
+              simpa using hyShift.symm
+      | inr hjge =>
+          have hlt₁ : pointToNat pOut₂ ax < 2 ^ (m ax) := by
+            simpa [pointToNat, Nat.shiftLeft_eq] using (BV.toNat_lt_shiftLeft_one (x := pOut₂ ax))
+          have hlt₂ : pointToNat pOut₁ ax < 2 ^ (m ax) := by
+            simpa [pointToNat, Nat.shiftLeft_eq] using (BV.toNat_lt_shiftLeft_one (x := pOut₁ ax))
+          have hpow : 2 ^ (m ax) ≤ 2 ^ (Nat.succ s + j) :=
+            Nat.pow_le_pow_right (by decide : 0 < (2 : Nat)) hjge
+          have hlt₁' : pointToNat pOut₂ ax < 2 ^ (Nat.succ s + j) := lt_of_lt_of_le hlt₁ hpow
+          have hlt₂' : pointToNat pOut₁ ax < 2 ^ (Nat.succ s + j) := lt_of_lt_of_le hlt₂ hpow
+          have hxBit : Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) = false :=
+            Nat.testBit_eq_false_of_lt hlt₁'
+          have hyBit : Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) = false :=
+            Nat.testBit_eq_false_of_lt hlt₂'
+          have hxShift :
+              Nat.testBit (pointToNat pOut₂ ax / 2 ^ (Nat.succ s)) j =
+                Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) := by
+            simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hx
+          have hyShift :
+              Nat.testBit (pointToNat pOut₁ ax / 2 ^ (Nat.succ s)) j =
+                Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) := by
+            simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hy
+          have hEqHi :
+              Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) =
+                Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) := by
+            calc
+              Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) = false := hxBit
+              _ = Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) := by
+                simpa using hyBit.symm
+          calc
+            Nat.testBit (pointToNat pOut₂ ax / 2 ^ (Nat.succ s)) j =
+                Nat.testBit (pointToNat pOut₂ ax) (Nat.succ s + j) := hxShift
+            _ = Nat.testBit (pointToNat pOut₁ ax) (Nat.succ s + j) := hEqHi
+            _ = Nat.testBit (pointToNat pOut₁ ax / 2 ^ (Nat.succ s)) j := by
+              simpa using hyShift.symm
+
+    set a : Nat := pointToNat pOut₂ ax / 2 ^ (Nat.succ s)
+    have hgLow : pointToNat pOut₂ ax = a * 2 ^ (Nat.succ s) + (2 ^ s - 1) := by
+      have h := (Nat.div_add_mod' (pointToNat pOut₂ ax) (2 ^ (Nat.succ s))).symm
+      simpa [a, hxmod, Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc, Nat.add_assoc] using h
+    have hgHigh : pointToNat pOut₁ ax = a * 2 ^ (Nat.succ s) + 2 ^ s := by
+      have h := (Nat.div_add_mod' (pointToNat pOut₁ ax) (2 ^ (Nat.succ s))).symm
+      simpa [a, hdiv, hymod, Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc, Nat.add_assoc] using h
+
+    have hStep : l1Dist pOut₂ pOut₁ = 1 :=
+      lemma_5_3 (m := m) (g := ax) (s := Nat.succ s) (a := a) (hs := Nat.succ_pos s)
+        (pLow := pOut₂) (pHigh := pOut₁) hgLow hgHigh (fun j hj => (hEqOther j hj).symm)
+    simpa [l1Dist, Nat.dist_comm] using hStep
+
+/-- Theorem 5.4 (Lattice continuity): successor indices decode to `L¹`-neighbors. -/
+theorem theorem_5_4
+    {n : Nat} {m : Exponents n}
+    (ds ds' : Digits)
+    (hSucc : Digits.succ ds = some ds')
+    (pOut₁ pOut₂ : PointBV m)
+    (hDec₁ : decodeDigits? (m := m) ds = some pOut₁)
+    (hDec₂ : decodeDigits? (m := m) ds' = some pOut₂) :
+    l1Dist pOut₁ pOut₂ = 1 := by
+  classical
+  -- Decompose the variable-radix successor into the common prefix, pivot digit, and overflow suffix.
+  rcases succ_decomp_pivot (ds := ds) (ds' := ds') hSucc with
+    ⟨hi, pivot, lo, hds, hds', hLoMax, hCarry⟩
+
+  -- Peel off the common prefix `hi` from both decodes, then apply the seam lemma at the pivot level.
+  have hPrefix :
+      ∀ {s : Nat} {st : State n (activeAxes m (Nat.succ s))}
+        {hi : Digits} {pivot : Digit} {lo : Digits}
+        {pAcc pOut₁ pOut₂ : PointBV m},
+        decodeFromLevel (m := m) (Nat.succ s) st (hi ++ pivot :: lo) pAcc = some pOut₁ →
+        decodeFromLevel (m := m) (Nat.succ s) st
+            (hi ++ (Digits.succDigit pivot).1 :: (lo.map Digits.zeroLike)) pAcc =
+          some pOut₂ →
+        (∀ d ∈ lo, BV.toNat d.2 = 2 ^ d.1 - 1) →
+        (Digits.succDigit pivot).2 = false →
+        l1Dist pOut₁ pOut₂ = 1 := by
+    intro s st hi pivot lo pAcc pOut₁ pOut₂ hDec₁ hDec₂ hLoMax hCarry
+    induction hi generalizing s st pAcc pOut₁ pOut₂ with
+    | nil =>
+        simpa using
+          (seam_unit_step_of_decodeFromLevel_succDigit (m := m)
+            (s := s) (st := st) (d := pivot) (lo := lo)
+            (pAcc := pAcc) (pOut₁ := pOut₁) (pOut₂ := pOut₂)
+            hDec₁ hDec₂ hCarry hLoMax)
+    | cons d0 hi ih =>
+        -- There is at least one more digit after the head, so `s` cannot be `0`.
+        cases s with
+        | zero =>
+            -- Level `1` decoding only succeeds on a singleton digit stream.
+            cases d0 with
+            | mk k w =>
+              -- `hi ++ pivot :: lo` is nonempty, so the decoder would return `none`.
+              simp [decodeFromLevel] at hDec₁
+        | succ s' =>
+            -- Unfold one decode step (head digit is shared), obtaining the same next state/accumulator.
+            cases d0 with
+            | mk k w =>
+              -- Name the active axes at this level.
+              let A : List (Axis n) := activeAxes m (Nat.succ (Nat.succ s'))
+              have hk : k = A.length := by
+                by_contra hne
+                have hNone :
+                    decodeFromLevel (m := m) (Nat.succ (Nat.succ s')) st
+                        (⟨k, w⟩ :: (hi ++ pivot :: lo)) pAcc =
+                      none := by
+                  simp [decodeFromLevel, A, hne]
+                have : (none : Option (PointBV m)) = some pOut₁ := by
+                  simpa [hNone] using hDec₁
+                exact Option.noConfusion this
+              -- Replace `k` by `A.length` so the width check becomes definitional.
+              cases hk
+
+              -- Rewrite the two decode hypotheses into the explicit `cons` form.
+              have hDec₁' :
+                  decodeFromLevel (m := m) (Nat.succ (Nat.succ s')) st
+                      (⟨(activeAxes m (Nat.succ (Nat.succ s'))).length, w⟩ :: (hi ++ pivot :: lo)) pAcc =
+                    some pOut₁ := by
+                simpa [List.cons_append, A] using hDec₁
+              have hDec₂' :
+                  decodeFromLevel (m := m) (Nat.succ (Nat.succ s')) st
+                      (⟨(activeAxes m (Nat.succ (Nat.succ s'))).length, w⟩ ::
+                        (hi ++ (Digits.succDigit pivot).1 :: lo.map Digits.zeroLike)) pAcc =
+                    some pOut₂ := by
+                simpa [List.cons_append, A] using hDec₂
+
+              -- Unfold `decodeFromLevel` at this head digit.
+              -- Unfold one step for the first decode and extract the recursive call.
+              -- The head digit is shared, so we can reuse the same next state/accumulator for both sides.
+              -- Peel one decode step: both sides share the same head digit `d0`.
+              have hStep₁ := hDec₁'
+              have hStep₂ := hDec₂'
+              -- Unfold the decoder one step at plane index `Nat.succ s'`.
+              simp [decodeFromLevel] at hStep₁ hStep₂
+              -- The only successful branch is where the embedding succeeds; extract it from `hStep₁`.
+              cases hEmb :
+                  Embed.embedState? (Aold := activeAxes m (Nat.succ (Nat.succ s')))
+                    (Anew := activeAxes m (Nat.succ s'))
+                    (stateUpdate (A := activeAxes m (Nat.succ (Nat.succ s'))) st w) with
+              | none =>
+                  -- In this branch the decoder returns `none`, contradicting `hStep₁`.
+                  have : (none : Option (PointBV m)) = some pOut₁ := by
+                    -- `hStep₁` is the unfolded decode equation.
+                    simpa [hEmb] using hStep₁
+                  exact Option.noConfusion this
+              | some st' =>
+                  -- In the successful branch, both equations reduce to the recursive calls with the same `st'` and accumulator.
+                  set p1 : PointBV m :=
+                    writePlane (activeAxes m (Nat.succ (Nat.succ s')))
+                      (Tinv st.e st.dPos.val (BV.gc w)) pAcc (Nat.succ s')
+                  have hStep₁' :
+                      decodeFromLevel (m := m) (Nat.succ s') st' (hi ++ pivot :: lo) p1 = some pOut₁ := by
+                    simpa [hEmb, p1] using hStep₁
+                  have hStep₂' :
+                      decodeFromLevel (m := m) (Nat.succ s') st'
+                          (hi ++ (Digits.succDigit pivot).1 :: lo.map Digits.zeroLike) p1 =
+                        some pOut₂ := by
+                    simpa [hEmb, p1] using hStep₂
+                  -- Now finish by applying the IH to the remaining prefix `hi`.
+                  exact ih (s := s') (st := st')
+                    (pAcc := p1) (pOut₁ := pOut₁) (pOut₂ := pOut₂)
+                    (hDec₁ := hStep₁') (hDec₂ := hStep₂')
+
+  -- Unfold the top-level decoder wrappers and feed the prefix lemma.
+  -- Decode only succeeds when `mMax m > 0` and the initial state exists.
+  cases hS : mMax m with
+  | zero =>
+      -- `decodeDigits?` at `mMax = 0` only succeeds on `[]`, but then `Digits.succ [] = none`.
+      cases ds with
+      | nil =>
+          have : False := by
+            -- `Digits.succ [] = none`.
+            simpa [Digits.succ, Digits.succAux] using hSucc
+          exact False.elim this
+      | cons d ds =>
+          have : (none : Option (PointBV m)) = some pOut₁ := by
+            -- `decodeDigits?` at `mMax = 0` only returns `some` on `[]`.
+            simpa [decodeDigits?, hS] using hDec₁
+          exact Option.noConfusion this
+  | succ s0 =>
+      have hDec₁' := hDec₁
+      have hDec₂' := hDec₂
+      -- Peel off the outer `mMax`-match in `decodeDigits?` (we are in the `Nat.succ` branch).
+      simp [decodeDigits?, hS] at hDec₁' hDec₂'
+
+      cases hInit : initState? (n := n) (activeAxes m (mMax m)) with
+      | none =>
+          -- `decodeDigits?` is `none` in this branch, contradicting `hDec₁`.
+          have : False := by
+            simpa [hInit] using hDec₁'
+          exact False.elim this
+      | some st0 =>
+          -- Reduce both decodes to the level-indexed form with accumulator `pointZero`.
+          have hLvl₁0 :
+              decodeFromLevel (m := m) (mMax m) st0 ds (pointZero (m := m)) = some pOut₁ := by
+            simpa [hInit] using hDec₁'
+          have hLvl₂0 :
+              decodeFromLevel (m := m) (mMax m) st0 ds' (pointZero (m := m)) = some pOut₂ := by
+            simpa [hInit] using hDec₂'
+
+          -- Transport the common initial state and both decode equalities to level `Nat.succ s0`.
+          have hS_succ : mMax m = Nat.succ s0 := by
+            simpa [Nat.succ_eq_add_one] using hS
+          let S : Nat → Type :=
+            fun k =>
+              {st : State n (activeAxes m k) //
+                decodeFromLevel (m := m) k st ds (pointZero (m := m)) = some pOut₁ ∧
+                  decodeFromLevel (m := m) k st ds' (pointZero (m := m)) = some pOut₂}
+          have pack : S (mMax m) := ⟨st0, ⟨hLvl₁0, hLvl₂0⟩⟩
+          have pack' : S (Nat.succ s0) := Eq.ndrec pack hS_succ
+
+          -- Rewrite digit streams using the pivot decomposition and apply `hPrefix`.
+          subst hds
+          subst hds'
+          exact hPrefix (s := s0) (st := pack'.1) (hi := hi) (pivot := pivot) (lo := lo)
+            (pAcc := pointZero (m := m)) (pOut₁ := pOut₁) (pOut₂ := pOut₂)
+            (by simpa using pack'.2.1) (by simpa using pack'.2.2) hLoMax hCarry
 
 /-
 TODO: Seam/unit-step lemma for Theorem 5.4.
