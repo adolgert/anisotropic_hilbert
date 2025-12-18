@@ -6,6 +6,7 @@ import AnisoHilbert.BVNatLemmas
 import AnisoHilbert.ChildGlueLemmas
 import AnisoHilbert.DigitsCarryMaxLemmas
 import AnisoHilbert.DecodeHeadXorLemmas
+import AnisoHilbert.ExitCornerLemmas
 import AnisoHilbert.DecodeHigherPlaneLemmas
 import AnisoHilbert.GrayAdjacencyLemmas
 import AnisoHilbert.RotLOneHotLemmas
@@ -273,6 +274,101 @@ theorem lemma_5_3
   · intro j hj
     have : pointToNat pLow j = pointToNat pHigh j := hEq j hj
     exact Nat.dist_eq_zero this
+
+/-!
+### Theorem 5.4 (Lattice continuity)
+
+We prove continuity by isolating the seam step between consecutive children at the pivot level
+identified by `Digits.succ`.
+-/
+
+private theorem unpackPlane_oneHotFin_eq_true_of_get
+    {n : Nat} (A : List (Axis n)) (hA : A.Nodup) (g : Fin A.length) :
+    unpackPlane A (BV.oneHotFin g) (A.get g) = true := by
+  classical
+  have hpos0 : pos? A (A.get g) = some g := Pos.pos?_get_of_nodup (xs := A) hA g
+  have hpos : pos? A A[g.1] = some g := by
+    simpa using hpos0
+  simp [unpackPlane, hpos, BV.oneHotFin]
+
+private theorem unpackPlane_oneHotFin_eq_false_of_mem_ne_get
+    {n : Nat} (A : List (Axis n)) (hA : A.Nodup) (g : Fin A.length) (j : Axis n)
+    (hj : j ∈ A) (hne : j ≠ A.get g) :
+    unpackPlane A (BV.oneHotFin g) j = false := by
+  classical
+  rcases Pos.pos?_some_of_mem (xs := A) (a := j) hj with ⟨t, ht⟩
+  have hget : A.get t = j := Pos.get_of_pos?_some (xs := A) (a := j) (i := t) ht
+  have htne : t ≠ g := by
+    intro hEq
+    apply hne
+    -- `hget : A.get t = j` and `t = g` imply `j = A.get g`.
+    simpa [hEq] using hget.symm
+  simp [unpackPlane, ht, BV.oneHotFin, htne]
+
+private theorem unpackPlane_oneHotFin_eq_false_of_not_mem
+    {n : Nat} (A : List (Axis n)) (g : Fin A.length) (j : Axis n) (hj : j ∉ A) :
+    unpackPlane A (BV.oneHotFin g) j = false := by
+  classical
+  cases hpos : pos? A j with
+  | none =>
+      simp [unpackPlane, hpos]
+  | some t =>
+      exfalso
+      have : j ∈ A := Pos.mem_of_pos?_some (xs := A) (a := j) (i := t) hpos
+      exact hj this
+
+private theorem unpackPlane_embedBV_eq_of_mem
+    {n : Nat} (Aold Anew : List (Axis n)) (x : BV Aold.length) (j : Axis n)
+    (hjOld : j ∈ Aold) (hjNew : j ∈ Anew) :
+    unpackPlane Anew (Embed.embedBV Aold Anew x) j = unpackPlane Aold x j := by
+  classical
+  rcases Pos.pos?_some_of_mem (xs := Aold) (a := j) hjOld with ⟨iOld, hiOld⟩
+  rcases Pos.pos?_some_of_mem (xs := Anew) (a := j) hjNew with ⟨iNew, hiNew⟩
+  have hgetNew : Anew.get iNew = j := Pos.get_of_pos?_some (xs := Anew) (a := j) (i := iNew) hiNew
+  have hpos : pos? Aold (Anew.get iNew) = some iOld := by
+    calc
+      pos? Aold (Anew.get iNew) = pos? Aold j := by
+        simpa using congrArg (fun a => pos? Aold a) hgetNew
+      _ = some iOld := hiOld
+  have hpos' : pos? Aold Anew[iNew.1] = some iOld := by
+    simpa using hpos
+  have hLeft : unpackPlane Anew (Embed.embedBV Aold Anew x) j = x iOld := by
+    -- Reduce `unpackPlane` at `j` to the embedded bit at position `iNew`.
+    simp [unpackPlane, hiNew, Embed.embedBV, hpos']
+  have hRight : unpackPlane Aold x j = x iOld := by
+    simp [unpackPlane, hiOld]
+  exact hLeft.trans hRight.symm
+
+private theorem unpackPlane_xor
+    {n : Nat} (A : List (Axis n)) (x y : BV A.length) (j : Axis n) :
+    unpackPlane A (BV.xor x y) j = BV.bxor (unpackPlane A x j) (unpackPlane A y j) := by
+  classical
+  by_cases hj : j ∈ A
+  · rcases Pos.pos?_some_of_mem (xs := A) (a := j) hj with ⟨t, ht⟩
+    simp [unpackPlane, ht, BV.xor, BV.bxor]
+  · -- if `j` is inactive, `unpackPlane` returns `false` on both sides.
+    have hx : unpackPlane A x j = false := by
+      cases hpos : pos? A j with
+      | none => simp [unpackPlane, hpos]
+      | some t =>
+          exfalso
+          have : j ∈ A := Pos.mem_of_pos?_some (xs := A) (a := j) (i := t) hpos
+          exact hj this
+    have hy : unpackPlane A y j = false := by
+      cases hpos : pos? A j with
+      | none => simp [unpackPlane, hpos]
+      | some t =>
+          exfalso
+          have : j ∈ A := Pos.mem_of_pos?_some (xs := A) (a := j) (i := t) hpos
+          exact hj this
+    have hxy : unpackPlane A (BV.xor x y) j = false := by
+      cases hpos : pos? A j with
+      | none => simp [unpackPlane, hpos]
+      | some t =>
+          exfalso
+          have : j ∈ A := Pos.mem_of_pos?_some (xs := A) (a := j) (i := t) hpos
+          exact hj this
+    simp [hxy, hx, hy, BV.bxor]
 
 end DiscreteProof
 
