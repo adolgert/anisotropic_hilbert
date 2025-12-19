@@ -1,0 +1,112 @@
+\documentclass[11pt]{article}
+\usepackage{geometry}
+\geometry{letterpaper, margin=0.7in}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\title{A Developer's Introduction to Hilbert Curves via Affine Transformations}
+\author{Andrew Dolgert}
+\date{\today}
+
+\newtheorem{definition}{Definition}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+A \textbf{space-filling curve} is a continuous mapping from a one-dimensional interval (like $[0, 1]$) to a higher-dimensional space (like the unit square $[0, 1]^2$ or unit hypercube $[0, 1]^n$) such that the image of the map completely covers the space. The \textbf{Hilbert curve} is a famous example, discovered by David Hilbert in 1891.
+
+For software developers, the Hilbert curve is not just a mathematical curiosity. It provides a practical way to map multi-dimensional data to a single dimension while preserving \textit{locality}. This means that points that are close together in the $n$-dimensional space are likely to be close together along the one-dimensional curve. This property is invaluable in many applications:
+\begin{itemize}
+    \item \textbf{Databases:} Indexing spatial data (e.g., geographic coordinates) for efficient range queries.
+    \item \textbf{Image Processing:} Linearizing image data for better cache coherence or for dithering algorithms.
+    \item \textbf{Parallel Computing:} Partitioning a multi-dimensional problem domain across processors while minimizing communication overhead.
+\end{itemize}
+
+This document introduces a constructive, computationally-focused definition of the Hilbert curve based on the approach found in the \texttt{refine-pi.c} implementation. This method models the curve's recursive generation using a sequence of affine transformations, leading to an elegant and efficient algorithm.
+
+\section{The Computational View}
+
+Our goal is to create a bijective map between a single integer, which we call the \textbf{Hilbert index} $h$, and a point $P$ within an $n$-dimensional hypercube. For computational purposes, we consider a discrete grid of points within this cube.
+
+Let our space have $n$ dimensions, and let the precision along each axis be $m$ bits. This defines a grid of $(2^m)^n = 2^{nm}$ points.
+\begin{itemize}
+    \item The \textbf{Hilbert index $h$} is an integer with $nm$ bits, so $0 \le h < 2^{nm}$.
+    \item The \textbf{coordinates} $(x_0, x_1, \dots, x_{n-1})$ are a set of $n$ integers, where each $x_i$ has $m$ bits ($0 \le x_i < 2^m$).
+\end{itemize}
+
+The mapping proceeds level by level. The $nm$ bits of the Hilbert index $h$ are grouped into $m$ "digits," where each digit $w$ is an $n$-bit number. At each level of the recursion, we process one digit $w$ from $h$ to produce one bit for each of the $n$ coordinates.
+
+\section{Formalizing the Recursion: The Affine Transformation}
+
+The core idea is that the Hilbert curve is built recursively. The base pattern (in 2D, a U-shape) is scaled and placed into each of the $2^n$ sub-cubes of the main cube. However, to connect into a single continuous path, these base patterns must be rotated and reflected.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.6\textwidth]{../article/hilbert_comparison_2x1.png}
+\caption{The first two levels of the 2D Hilbert curve. Note how the base pattern is rotated and reflected in each quadrant.}
+\end{figure}
+
+The \texttt{refine-pi} approach models this orientation change using an \textbf{affine transformation state} that evolves at each level of the recursion. The state at any level $k$ is given by a pair $(e_k, \pi_k)$:
+\begin{itemize}
+    \item $\pi_k$: A \textbf{permutation} of the coordinate axes.
+    \item $e_k$: An $n$-bit vector representing the \textbf{entry point} or a reflection.
+\end{itemize}
+
+At each level, we map a digit $w$ (from the Hilbert index) to a \textbf{plane label} $p$ (which contains the bits for the coordinates at this level). This mapping is where the state is used. The transformation is:
+\begin{equation*} p = \pi_k(g) \oplus e_k \end{equation*} where $\oplus$ is the bitwise XOR operation and $g$ is the \textbf{Gray code} of $w$, i.e., $g = w \oplus (w \gg 1)$.
+
+\paragraph{Why Gray Codes?} The Gray code ensures that if we increment $w$ by 1, the corresponding $g$ value changes by only a single bit. This property is what makes the resulting Hilbert curve continuous, ensuring that sequentially numbered sub-cubes are always physically adjacent.
+
+\paragraph{Simplifying the Permutation} In the isotropic (equal-sided) case, the permutation $\pi_k$ is always a cyclic shift of the coordinate axes. A cyclic shift can be implemented efficiently as a bitwise rotation. We can therefore simplify our state representation from $(e, \pi)$ to $(e, r)$, where $r$ is an integer \textbf{rotation index}. The transformation becomes:
+\begin{equation*} p = \text{rotr}(g, r_k) \oplus e_k \end{equation*} This is the precise model used in \texttt{refine-pi.c}.
+
+\section{The Algorithms}
+
+\subsection{Decode (Index $h$ to Coordinates)}
+
+To find the coordinates for a Hilbert index $h$, we start with an initial state and iterate $m$ times, from the most significant bits to the least significant.
+
+\textbf{Initial State:} $(e_0, r_0) = (0, 1 \pmod n)$.
+
+\textbf{Loop:} For each level $k$ from $0$ to $m-1$:
+\begin{enumerate}
+    \item \textbf{Extract Digit:} Get the $n$-bit digit $w_k$ from the most significant end of the remaining Hilbert index $h$.
+    \begin{equation*} w_k = (h \gg (n \times (m-1-k))) \& ((1 \ll n) - 1) \end{equation*}
+    \item \textbf{Gray Code:} Compute the Gray code of the digit.
+    \begin{equation*} g_k = w_k \oplus (w_k \gg 1) \end{equation*}
+    \item \textbf{Apply Inverse Transform:} Find the plane label $p_k$. This is the inverse of the transformation defined earlier.
+    \begin{equation*} p_k = \text{rotl}(g_k \oplus e_k, r_k) \end{equation*}
+    \item \textbf{Scatter Bits:} The bits of $p_k$ are the $k$-th bits of the final coordinates. For each coordinate $x_j$, we append the $j$-th bit of $p_k$.
+    \begin{equation*} x_j = (x_j \ll 1) | ((p_k \gg j) \& 1) \end{equation*}
+    \item \textbf{Update State:} Compute the state $(e_{k+1}, r_{k+1})$ for the next level. This is done via a composition rule, using pre-computed functions \texttt{child\_entry(w)} and \texttt{child\_dir(w)}.
+    \begin{align*}        e_{k+1} &= e_k \oplus \text{rotr}(\text{child\_entry}(w_k), r_k) \        r_{k+1} &= (r_k + \text{child\_dir}(w_k) + 1) \pmod n    \end{align*}
+\end{enumerate}
+
+\subsection{Encode (Coordinates to Index $h$)}
+
+The encoding process is the exact reverse. We iterate through the bits of the coordinates to build up the Hilbert index $h$.
+
+\textbf{Initial State:} $(e_0, r_0) = (0, 1 \pmod n)$, and $h=0$.
+
+\textbf{Loop:} For each level $k$ from $0$ to $m-1$:
+\begin{enumerate}
+    \item \textbf{Gather Bits:} Collect the most significant bit from each coordinate to form the plane label $p_k$.
+    \begin{equation*} p_k = \sum_{j=0}^{n-1} ((x_j \gg (m-1-k)) \& 1) \ll j \end{equation*}
+    \item \textbf{Apply Forward Transform:} Use the current state to find the Gray code $g_k$.
+    \begin{equation*} g_k = \text{rotr}(p_k \oplus e_k, r_k) \end{equation*}
+    \item \textbf{Inverse Gray Code:} Find the digit $w_k$ from its Gray code.
+    \begin{equation*} w_k = \text{gray\_decode}(g_k) \end{equation*}
+    \item \textbf{Append Digit:} Append the $n$-bit digit $w_k$ to the Hilbert index $h$.
+    \begin{equation*} h = (h \ll n) | w_k \end{equation*}
+    \item \textbf{Update State:} Update the state $(e_k, r_k)$ to $(e_{k+1}, r_{k+1})$ using the exact same composition rule as in the decode step.
+\end{enumerate}
+
+\section{Conclusion}
+
+The affine transformation model provides a powerful and elegant way to understand and implement the Hilbert curve. By representing the curve's orientation as a state $(e, r)$ that is composed at each level of recursion, we arrive at an algorithm that is both computationally efficient and has a clear mathematical structure. This clarity is not merely academic; it is the key to extending the algorithm to more complex domains, such as anisotropic spaces, and to developing advanced techniques like efficient neighborhood and range queries.
+
+\end{document}

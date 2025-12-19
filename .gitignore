@@ -1,0 +1,29 @@
+# Lean
+.lake/
+
+# latex
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+*.gz
+article/article.pdf
+
+# compilation
+*.out
+*.o
+*.so
+lean/lake-manifest.json
+
+# Python
+__pycache__/
+
+# AI
+CLAUDE.md
+codex/
+
+# References to ignore
+papers/
+journals/

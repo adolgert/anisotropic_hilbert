@@ -18,7 +18,7 @@ TARGET = libanisotropic_hilbert$(LIBEXT)
 SRC = anisotropic_hilbert.c
 OBJ = $(SRC:.c=.o)
 
-.PHONY: all clean test
+.PHONY: all clean test refine_pi_test
 
 all: $(TARGET)
 
@@ -40,6 +40,10 @@ quicktest: $(TARGET)
 
 clean:
 	rm -f $(TARGET) $(OBJ)
+
+# Build and run the refine_pi self-test harness.
+refine_pi_test: refine_pi.c
+	$(CC) $(CFLAGS) -DREFINE_PI_TEST -o refine_pi_test refine_pi.c
 
 # Show compiler info
 info:
