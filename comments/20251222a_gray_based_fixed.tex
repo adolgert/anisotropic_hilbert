@@ -1,0 +1,422 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{tikz}
+\usetikzlibrary{positioning,calc}
+\usepackage{booktabs}
+\usepackage{enumitem}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\NN}{\mathbb{N}}
+\newcommand{\ZZ}{\mathbb{Z}}
+\newcommand{\Sym}{\mathrm{Sym}}
+
+\newcommand{\Gray}{\mathsf{G}}
+\newcommand{\entry}{\mathsf{entry}}
+\newcommand{\exitp}{\mathsf{exit}}
+\newcommand{\embed}{\uparrow}
+
+\newcommand{\normone}[1]{\left\lVert #1 \right\rVert_1}
+
+\title{Hilbert Curves via Oriented Gray Codes}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present a framework for Hilbert lattice curves based on Gray codes and orientations.
+The key viewpoint is that a Hilbert curve is a hierarchy of \emph{oriented binary reflected Gray codes} (BRGCs),
+glued along shared faces.
+This framework extends naturally to anisotropic dyadic boxes (unequal side lengths)
+once we specify (i) an ordering of axes and (ii) an embedding rule that extends orientations when new axes activate.
+\end{abstract}
+
+%=============================================================================
+\section{The hypercube and the binary reflected Gray code}
+%=============================================================================
+
+\begin{definition}[$k$-cube corners]
+For $k\ge 1$, the \emph{$k$-cube corner set} is
+\[
+V_k := \{0,1\}^k,
+\]
+whose elements we call \emph{corners} or \emph{vertices}.
+\end{definition}
+
+\begin{definition}[Adjacency and Hamming distance]
+Two corners $u,v\in V_k$ are \emph{adjacent} if they differ in exactly one coordinate.
+Equivalently, their \emph{Hamming distance} is $d_H(u,v)=1$.
+\end{definition}
+
+\begin{definition}[Gray code]
+A \emph{Gray code} on $V_k$ is a sequence
+\[
+(c_0,c_1,\dots,c_{2^k-1})\quad\text{with }c_i\in V_k
+\]
+that visits each corner exactly once and satisfies $d_H(c_i,c_{i+1})=1$ for all $i$.
+\end{definition}
+
+We will use a particular Gray code: the \emph{binary reflected Gray code} (BRGC).
+We define it inductively (no bit arithmetic is needed).
+
+\begin{definition}[Binary reflected Gray code (BRGC)]\label{def:brgc}
+Define $\Gray_1:\{0,1\}\to V_1$ by $\Gray_1(0)=0$ and $\Gray_1(1)=1$.
+Assume $\Gray_k:\{0,\dots,2^k-1\}\to V_k$ is defined.
+Define $\Gray_{k+1}:\{0,\dots,2^{k+1}-1\}\to V_{k+1}$ by
+\[
+\Gray_{k+1}(i) :=
+\begin{cases}
+0\,\Gray_k(i) & 0\le i < 2^k,\\[2pt]
+1\,\Gray_k(2^{k+1}-1-i) & 2^k \le i < 2^{k+1},
+\end{cases}
+\]
+where $b\,x$ denotes concatenation of a leading bit $b\in\{0,1\}$ with a $k$-bit string $x\in V_k$.
+\end{definition}
+
+\begin{lemma}[BRGC adjacency]\label{lem:brgc-adj}
+For every $k\ge 1$, the sequence $\bigl(\Gray_k(0),\Gray_k(1),\dots,\Gray_k(2^k-1)\bigr)$ is a Gray code on $V_k$.
+\end{lemma}
+
+\begin{proof}
+By induction on $k$.
+For $k=1$ this is immediate.
+Assume the claim holds for $k$.
+The first half of $\Gray_{k+1}$ is $0\,\Gray_k(0),\dots,0\,\Gray_k(2^k-1)$, which is adjacent step-by-step by induction.
+The second half is $1\,\Gray_k(2^k-1),\dots,1\,\Gray_k(0)$, again adjacent step-by-step by induction.
+At the seam, the last element of the first half is $0\,\Gray_k(2^k-1)$ and the first element of the second half is
+$1\,\Gray_k(2^k-1)$, which differ in exactly the leading coordinate.
+\end{proof}
+
+\begin{definition}[The flip coordinate]\label{def:g}
+For $k\ge 1$ and $0\le i < 2^k-1$, define $g_k(i)\in\{0,\dots,k-1\}$ to be the \emph{unique} coordinate index
+for which $\Gray_k(i)$ and $\Gray_k(i+1)$ differ.
+(Existence and uniqueness follow from Lemma~\ref{lem:brgc-adj}.)
+\end{definition}
+
+\begin{example}[BRGC for $k=2$]\label{ex:brgc2}
+\[
+\Gray_2(0)=00,\quad
+\Gray_2(1)=01,\quad
+\Gray_2(2)=11,\quad
+\Gray_2(3)=10.
+\]
+\end{example}
+
+\begin{example}[BRGC for $k=3$]\label{ex:brgc3}
+\[
+\begin{array}{c|c}
+i & \Gray_3(i) \\\midrule
+0 & 000 \\
+1 & 001 \\
+2 & 011 \\
+3 & 010 \\
+4 & 110 \\
+5 & 111 \\
+6 & 101 \\
+7 & 100 \\
+\end{array}
+\]
+\end{example}
+
+%=============================================================================
+\section{Orientations and oriented Gray codes}
+%=============================================================================
+
+The Hilbert recursion places copies of a lower-order curve inside each subcube.
+Those copies may be rotated and reflected; we model this combinatorially on corners.
+
+\begin{definition}[Axis permutation action]
+Let $\pi\in\Sym(k)$ be a permutation of $\{0,\dots,k-1\}$.
+Its action on $v\in V_k$ is defined by permuting coordinates:
+\[
+(\pi\cdot v)_a := v_{\pi^{-1}(a)}.
+\]
+\end{definition}
+
+\begin{definition}[Orientation map]\label{def:orientation}
+An \emph{orientation} on $V_k$ is specified by a pair $(e,\pi)$ with $e\in V_k$ and $\pi\in\Sym(k)$.
+It acts on corners by
+\[
+\mathcal{O}_{(e,\pi)}(v) := \pi\cdot v \oplus e,
+\]
+where $\oplus$ denotes coordinatewise XOR on $\{0,1\}$.
+\end{definition}
+
+\begin{definition}[Oriented BRGC]\label{def:oriented-brgc}
+Given an orientation $(e,\pi)$ on $V_k$, the associated \emph{oriented BRGC} is the sequence
+\[
+c_i := \mathcal{O}_{(e,\pi)}\bigl(\Gray_k(i)\bigr),\qquad i=0,\dots,2^k-1.
+\]
+\end{definition}
+
+\begin{lemma}[Orientations preserve adjacency]\label{lem:orient-adj}
+If $u,v\in V_k$ are adjacent, then $\mathcal{O}_{(e,\pi)}(u)$ and $\mathcal{O}_{(e,\pi)}(v)$ are adjacent.
+In particular, every oriented BRGC (Definition~\ref{def:oriented-brgc}) is a Gray code on $V_k$.
+\end{lemma}
+
+\begin{proof}
+Adjacency means $u$ and $v$ differ in exactly one coordinate.
+Permuting coordinates preserves that property, and XOR with a fixed $e$ flips the same coordinates in both points,
+so it also preserves the set of differing coordinates.
+\end{proof}
+
+%=============================================================================
+\section{Generators and the gluing condition}
+%=============================================================================
+
+At a given recursion step, we subdivide a $k$-dimensional cell into $2^k$ children and visit them in BRGC order.
+A \emph{generator} specifies how each child is oriented.
+
+\begin{definition}[Generator for dimension $k$]\label{def:generator}
+A \emph{$k$-dimensional generator} is a map
+\[
+\mu_k:\{0,\dots,2^k-1\}\to V_k\times \Sym(k),
+\qquad \mu_k(i)=(e(i),\pi(i)),
+\]
+assigning an orientation to the $i$-th child in the traversal order.
+\end{definition}
+
+\begin{definition}[Entry and exit corners]\label{def:entry-exit}
+Fix $k$ and a generator $\mu_k$.
+For child $i$, define
+\[
+\entry(i):=e(i),
+\qquad
+\exitp(i):=\mathcal{O}_{(e(i),\pi(i))}\bigl(\Gray_k(2^k-1)\bigr).
+\]
+That is, $\entry(i)$ is the first corner of the oriented BRGC inside the child,
+and $\exitp(i)$ is the last corner of that oriented BRGC.
+\end{definition}
+
+\begin{definition}[Gluing condition]\label{def:gluing}
+A generator $\mu_k$ satisfies the \emph{gluing condition} if for all $0\le i<2^k-1$,
+\[
+\exitp(i)\ \oplus\ \mathbf{e}_{g_k(i)} \;=\; \entry(i+1),
+\]
+where $g_k(i)$ is the flip coordinate from Definition~\ref{def:g} and $\mathbf{e}_a\in V_k$ is the $a$-th unit vector.
+\end{definition}
+
+\begin{remark}
+The gluing condition says: if consecutive children differ in the BRGC along local coordinate $g_k(i)$,
+then the end of child $i$ and the start of child $i+1$ are also adjacent along that same local coordinate.
+This is the only local constraint needed to ensure lattice continuity at child boundaries.
+\end{remark}
+
+%=============================================================================
+\section{Anisotropic dyadic boxes, levels, and active axes}
+%=============================================================================
+
+For equal side lengths $2^m$ in each dimension, all axes participate at every recursion step.
+For anisotropic boxes, different axes become active at different levels.
+
+\begin{definition}[Dyadic box]\label{def:box}
+Fix $n\ge 1$ and extents $m=(m_0,\dots,m_{n-1})\in\NN^n$.
+Define the \emph{dyadic box}
+\[
+P(m) := \prod_{j=0}^{n-1}\{0,1,\dots,2^{m_j}-1\}\subset \ZZ^n,
+\]
+and write $M:=\sum_{j=0}^{n-1} m_j$ and $m_{\max}:=\max_j m_j$.
+\end{definition}
+
+\begin{definition}[Axis priority order]\label{def:axis-order}
+Fix the extents $m$.
+Define a total order $\prec$ on axes $\{0,\dots,n-1\}$ by
+\[
+j\prec j' \quad\Longleftrightarrow\quad (m_j,j)\text{ is lexicographically smaller than }(m_{j'},j').
+\]
+(Shorter extents first; ties broken by axis index.)
+\end{definition}
+
+\begin{definition}[Levels and active axes]\label{def:levels-active}
+We index levels by integers $s\in\{m_{\max},m_{\max}-1,\dots,1\}$, where $s=m_{\max}$ is the coarsest split
+and $s=1$ is the finest split.
+
+At level $s$, the \emph{active axis set} is
+\[
+A_s := \{j\in\{0,\dots,n-1\} : m_j\ge s\}.
+\]
+Let $k_s:=|A_s|$ and let
+\[
+A_s=[a^{(s)}_0,\dots,a^{(s)}_{k_s-1}]
+\]
+denote the active axes listed in increasing $\prec$-order (Definition~\ref{def:axis-order}).
+\end{definition}
+
+\begin{proposition}[Monotone activation]\label{prop:monotone}
+For $2\le s\le m_{\max}$ we have $A_s\subseteq A_{s-1}$ as sets, hence $k_s\le k_{s-1}$.
+Equivalently: as we move from coarse to fine (decreasing $s$), axes may activate but never deactivate.
+\end{proposition}
+
+\begin{definition}[Inclusion map between active-axis lists]\label{def:inclusion}
+Whenever $2\le s\le m_{\max}$, the ordered list $A_s$ is an order-preserving subsequence of $A_{s-1}$.
+Define the (unique) order-preserving injection
+\[
+\iota_s:\{0,\dots,k_s-1\}\hookrightarrow \{0,\dots,k_{s-1}-1\}
+\]
+by the rule
+\[
+a^{(s)}_t = a^{(s-1)}_{\iota_s(t)}\qquad\text{for all }t.
+\]
+\end{definition}
+
+\begin{example}[A $4\times 2$ box]\label{ex:4x2}
+Let $n=2$ and $m=(2,1)$, so $P(m)=\{0,\dots,3\}\times\{0,1\}$.
+Here $m_{\max}=2$.
+The axis priority order has $1\prec 0$ (since $m_1=1<m_0=2$).
+Thus:
+\[
+A_2=[0]\quad(k_2=1),\qquad
+A_1=[1,0]\quad(k_1=2).
+\]
+At the coarsest level $s=2$ only axis $0$ is active; at the finer level $s=1$ axis $1$ activates and is inserted \emph{before} axis $0$ in the ordered list.
+\end{example}
+
+%=============================================================================
+\section{Embedding orientations when new axes activate}
+%=============================================================================
+
+When moving from level $s$ to the finer level $s-1$, the active dimension may increase from $k_s$ to $k_{s-1}$.
+We embed corner labels and orientations using the inclusion map $\iota_s$ (Definition~\ref{def:inclusion}).
+
+\begin{definition}[Embedding of corners]\label{def:embed-corners}
+For $2\le s\le m_{\max}$ define the embedding
+\[
+E_s:V_{k_s}\to V_{k_{s-1}}
+\]
+by
+\[
+\bigl(E_s(u)\bigr)_{\iota_s(t)} := u_t \quad\text{for }t=0,\dots,k_s-1,
+\qquad
+\bigl(E_s(u)\bigr)_q := 0 \quad\text{for }q\notin \mathrm{im}(\iota_s).
+\]
+In words: keep the bits on shared axes, and set newly activated coordinates to $0$.
+\end{definition}
+
+\begin{definition}[Embedding of orientations]\label{def:embed-orientation}
+Let $(e,\pi)$ be an orientation on $V_{k_s}$.
+Define its embedded orientation $(e^\embed,\pi^\embed)$ on $V_{k_{s-1}}$ by:
+\[
+e^\embed := E_s(e),
+\]
+and
+\[
+\pi^\embed(q) :=
+\begin{cases}
+\iota_s\bigl(\pi(t)\bigr) & \text{if }q=\iota_s(t)\text{ for some }t\in\{0,\dots,k_s-1\},\\[2pt]
+q & \text{if }q\notin \mathrm{im}(\iota_s).
+\end{cases}
+\]
+That is: $\pi$ is transported to the larger coordinate system via $\iota_s$, and new coordinates are fixed.
+\end{definition}
+
+\begin{lemma}[Embedding preserves adjacency]\label{lem:embed-adj}
+If $u,v\in V_{k_s}$ are adjacent (differ in local coordinate $t$),
+then $E_s(u)$ and $E_s(v)$ are adjacent in $V_{k_{s-1}}$ (differ in local coordinate $\iota_s(t)$).
+\end{lemma}
+
+\begin{proof}
+All newly activated coordinates are $0$ for both $E_s(u)$ and $E_s(v)$.
+On shared coordinates, $u$ and $v$ differ in exactly one position $t$, which is carried to position $\iota_s(t)$.
+\end{proof}
+
+\begin{proposition}[Embedding preserves the gluing condition]\label{prop:embed-gluing}
+Let $\mu_{k_s}$ be a generator for dimension $k_s$ satisfying the gluing condition (Definition~\ref{def:gluing}).
+Transport each child orientation by Definition~\ref{def:embed-orientation} to obtain an induced generator in dimension $k_{s-1}$.
+Then the gluing condition continues to hold in the larger coordinate system (with $g_{k_s}(i)$ replaced by $\iota_s(g_{k_s}(i))$).
+\end{proposition}
+
+\begin{proof}
+By Lemma~\ref{lem:embed-adj}, adjacency of endpoints in $V_{k_s}$ becomes adjacency in $V_{k_{s-1}}$ at the embedded coordinate.
+\end{proof}
+
+\begin{remark}[What “extend $\pi$ by identity” really means]
+If one thinks of $\pi$ as acting on \emph{physical axes}, then activating a new axis truly corresponds to “extend by the identity.”
+In the present mixed-dimensional setup, however, $\pi$ acts on the \emph{local coordinate indices} $\{0,\dots,k_s-1\}$,
+so we must also specify how old local indices are identified with new ones. That identification is exactly the inclusion map $\iota_s$.
+\end{remark}
+
+%=============================================================================
+\section{A seam lemma for dyadic scaling}
+%=============================================================================
+
+The gluing condition is stated on \emph{corner labels}. To translate it into a unit lattice step,
+we use the following elementary observation about dyadic splits.
+
+\begin{lemma}[Dyadic seam is a unit step]\label{lem:dyadic-seam}
+Fix $s\ge 1$ and consider a split of an interval of length $2^s$ into two halves of length $2^{s-1}$.
+Let $q,q'\in\{0,1\}$ denote the lower/upper half and let $c,c'\in\{0,1\}$ denote the lower/upper \emph{endpoint within that half}.
+Define the corresponding lattice coordinates by
+\[
+\Phi_s(q,c):= q\cdot 2^{s-1} + c\cdot(2^{s-1}-1).
+\]
+If $(q',c')=(q\oplus 1,\,c\oplus 1)$, then $|\Phi_s(q',c')-\Phi_s(q,c)|=1$.
+\end{lemma}
+
+\begin{proof}
+A direct check gives the two possibilities $(q,c)=(0,1)\mapsto(1,0)$ and $(1,0)\mapsto(0,1)$, yielding $\pm 1$.
+\end{proof}
+
+%=============================================================================
+\section{Continuity for the active-axis construction (statement level)}
+%=============================================================================
+
+We state the continuity claim in the form used by the activation proof:
+continuity reduces to checking seams at the first level where two indices differ.
+
+\begin{theorem}[Lattice continuity (active axes)]\label{thm:continuity}
+Let $m\in\NN^n$ and consider a hierarchical traversal of $P(m)$ built level-by-level as follows:
+at each level $s$ the current cell is split along the active axes $A_s$ into $2^{k_s}$ children,
+the children are visited in BRGC order, and each child receives an orientation so that the local gluing condition holds.
+When moving from level $s$ to $s-1$ and new axes activate, orientations are embedded via Definitions
+\ref{def:embed-corners}--\ref{def:embed-orientation}.
+
+Then consecutive points in the traversal are Manhattan neighbors:
+\[
+\normone{H_m(h+1)-H_m(h)}=1\qquad\text{for all }0\le h<2^M-1.
+\]
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+Let $h$ and $h+1$ be consecutive indices and let $s^{*}$ be the finest level at which their mixed-radix digits first differ.
+Equivalently, below level $s^{*}$ all finer digits overflow from their maximum to $0$, and the digit at level $s^{*}$ advances to the next child in BRGC order.
+
+Thus $H_m(h)$ is the \emph{exit point} of one level-$s^{*}$ child and $H_m(h+1)$ is the \emph{entry point} of the next child.
+By the gluing condition, their corner labels differ in exactly one local coordinate, namely the flip coordinate $g_{k_{s^{*}}}(i)$.
+At the physical grid scale $2^{s^{*}-1}$, adjacent children differ by an offset of $2^{s^{*}-1}$ along that active axis,
+and the gluing condition flips the corresponding endpoint bit. Lemma~\ref{lem:dyadic-seam} then gives a unit step in $\ZZ^n$.
+Embedding across activation boundaries preserves which \emph{physical} axis this seam lies on (Definition~\ref{def:inclusion}).
+All other coordinates coincide, so the $\ell^1$ distance is $1$.
+\end{proof}
+
+%=============================================================================
+\section{Summary}
+%=============================================================================
+
+The framework reduces the mechanics of Hilbert lattice continuity to three ingredients:
+\begin{enumerate}[nosep]
+\item the BRGC as the canonical order of children at each split;
+\item orientations as adjacency-preserving re-labellings of corners;
+\item the gluing condition, plus an embedding rule that keeps axis identity consistent when the active dimension changes.
+\end{enumerate}
+
+%=============================================================================
+\appendix
+\section{Optional: closed forms (reference only)}
+%=============================================================================
+
+The present development deliberately avoids closed bit formulas.
+When one later wishes to implement the BRGC by arithmetic on integers, it admits standard closed forms,
+and Hamilton's $T$-transform is one way to represent orientations efficiently.
+Those details are not needed for the structural arguments above.
+
+\end{document}
