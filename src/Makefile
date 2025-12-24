@@ -16,11 +16,17 @@ else
     LIBEXT = .so
 endif
 
+# Lean toolchain paths (for Lean-enabled builds)
+LEAN_HOME ?= $(HOME)/.elan/toolchains/leanprover--lean4---v4.26.0
+LEAN_DIR = ../lean
+LEAN_LIB = $(LEAN_HOME)/lib/lean
+PROJECT_LIB = $(LEAN_DIR)/.lake/build/lib/lean
+
 TARGET = libanisotropic_hilbert$(LIBEXT)
 SRC = anisotropic_hilbert.c
 OBJ = $(SRC:.c=.o)
 
-.PHONY: all clean test refine_pi_test test_affine test_affine_verbose
+.PHONY: all clean test refine_pi_test test_affine test_affine_verbose test_affine_lean test_compare
 
 all: $(TARGET)
 
@@ -41,7 +47,7 @@ quicktest: $(TARGET)
 	python3 -c "from anisotropic_hilbert_c import encode, decode; print('C library loaded'); p = decode(0, (2,2)); print(f'decode(0, (2,2)) = {p}')"
 
 clean:
-	rm -f $(TARGET) $(OBJ) hilbert_affine.o test_hilbert_affine refine_pi_test
+	rm -f $(TARGET) $(OBJ) hilbert_affine.o hilbert_ffi.o test_hilbert_affine test_hilbert_affine_lean refine_pi_test
 
 # Build and run the refine_pi self-test harness.
 refine_pi_test: refine_pi.c
@@ -69,3 +75,40 @@ info:
 	@echo "CXXFLAGS: $(CXXFLAGS)"
 	@echo "Target: $(TARGET)"
 	@$(CC) --version | head -1
+
+# ---------------------------------------------------------------------------
+# Lean-enabled builds
+# ---------------------------------------------------------------------------
+
+# Find AnisoHilbert dylibs (macOS) or .so files (Linux)
+ifeq ($(UNAME_S),Darwin)
+    ANISO_DYLIBS = $(wildcard $(PROJECT_LIB)/AnisoHilbert*.dylib)
+    RPATH_FLAGS = -Wl,-rpath,$(LEAN_LIB) -Wl,-rpath,$(PROJECT_LIB)
+else
+    ANISO_DYLIBS = $(wildcard $(PROJECT_LIB)/AnisoHilbert*.so)
+    RPATH_FLAGS = -Wl,-rpath,$(LEAN_LIB) -Wl,-rpath,$(PROJECT_LIB)
+endif
+
+# Compile FFI wrapper
+hilbert_ffi.o: $(LEAN_DIR)/ffi/hilbert_ffi.c
+	$(CC) -c -I$(LEAN_HOME)/include -I$(LEAN_DIR)/ffi -fPIC -O2 -o $@ $<
+
+# Build test harness with Lean support
+test_hilbert_affine_lean: test_hilbert_affine.cpp hilbert_affine.o hilbert_ffi.o
+	$(CXX) $(CXXFLAGS) -DWITH_LEAN -I$(LEAN_DIR)/ffi \
+	    -o $@ $^ \
+	    -L$(LEAN_LIB) -L$(PROJECT_LIB) \
+	    -lleanshared $(ANISO_DYLIBS) \
+	    $(RPATH_FLAGS)
+
+# Run Lean implementation tests
+test_affine_lean: test_hilbert_affine_lean
+	./test_hilbert_affine_lean --lean
+
+# Run comparison between C and Lean implementations
+test_compare: test_hilbert_affine_lean
+	./test_hilbert_affine_lean --compare
+
+# Verbose comparison
+test_compare_verbose: test_hilbert_affine_lean
+	./test_hilbert_affine_lean -v --compare

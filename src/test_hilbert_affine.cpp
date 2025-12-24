@@ -13,8 +13,17 @@
  *   ./test_hilbert_affine       # Run tests, minimal output
  *   ./test_hilbert_affine -v    # Verbose output
  *
- * Build:
+ * With Lean support (compile with -DWITH_LEAN):
+ *   ./test_hilbert_affine_lean --lean     # Test Lean implementation
+ *   ./test_hilbert_affine_lean --compare  # Compare C vs Lean
+ *
+ * Build (C only):
  *   g++ -std=c++17 -O2 -o test_hilbert_affine test_hilbert_affine.cpp hilbert_affine.c
+ *
+ * Build (with Lean):
+ *   g++ -std=c++17 -O2 -DWITH_LEAN -I../lean/ffi -o test_hilbert_affine_lean \
+ *       test_hilbert_affine.cpp hilbert_affine.o hilbert_ffi.o \
+ *       -lleanshared -L$LEAN_LIB -L$PROJECT_LIB ...
  */
 
 #include <algorithm>
@@ -24,6 +33,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+
+#ifdef WITH_LEAN
+#include "hilbert_ffi.h"
+#endif
 
 // C interface from hilbert_affine.c
 extern "C" {
@@ -53,6 +66,50 @@ static HilbertImpl affine_impl = {
     hilbert_affine_decode,
     "hilbert_affine"
 };
+
+#ifdef WITH_LEAN
+// ---------------------------------------------------------------------------
+// Lean implementation wrappers
+// ---------------------------------------------------------------------------
+
+// Wrapper to adapt Lean FFI to HilbertImpl interface
+static hindex_t lean_encode_wrapper(const coord_t* point, const int* m, int n) {
+    uint32_t exponents[32];
+    for (int i = 0; i < n; i++) exponents[i] = (uint32_t)m[i];
+    return (hindex_t)hilbert_lean_encode((uint32_t)n, point, exponents);
+}
+
+static void lean_decode_wrapper(hindex_t h, const int* m, int n, coord_t* point) {
+    uint32_t exponents[32];
+    for (int i = 0; i < n; i++) exponents[i] = (uint32_t)m[i];
+    hilbert_lean_decode((uint32_t)n, exponents, (uint64_t)h, point);
+}
+
+static HilbertImpl lean_impl = {
+    lean_encode_wrapper,
+    lean_decode_wrapper,
+    "lean"
+};
+
+static bool lean_initialized = false;
+
+static bool init_lean() {
+    if (lean_initialized) return true;
+    if (hilbert_lean_init() != 0) {
+        fprintf(stderr, "Failed to initialize Lean runtime\n");
+        return false;
+    }
+    lean_initialized = true;
+    return true;
+}
+
+static void finalize_lean() {
+    if (lean_initialized) {
+        hilbert_lean_finalize();
+        lean_initialized = false;
+    }
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // Globals
@@ -380,17 +437,197 @@ static bool test_exhaustive_4d(const HilbertImpl& impl) {
     return all_pass;
 }
 
+#ifdef WITH_LEAN
+// ---------------------------------------------------------------------------
+// Cross-implementation comparison
+// ---------------------------------------------------------------------------
+
+static bool compare_implementations(const HilbertImpl& a, const HilbertImpl& b,
+                                     const int* m, int n) {
+    int total_bits = sum_bits(m, n);
+    if (total_bits == 0 || total_bits > 64) {
+        return true;  // Skip trivial or too large
+    }
+
+    uint64_t N = 1ULL << total_bits;
+    std::vector<uint32_t> point_a(n), point_b(n);
+
+    for (uint64_t h = 0; h < N; h++) {
+        // Compare decode
+        a.decode((hindex_t)h, m, n, point_a.data());
+        b.decode((hindex_t)h, m, n, point_b.data());
+
+        if (point_a != point_b) {
+            printf("MISMATCH decode at h=%llu:\n", (unsigned long long)h);
+            printf("  %s: ", a.name);
+            print_point(point_a.data(), n);
+            printf("\n  %s: ", b.name);
+            print_point(point_b.data(), n);
+            printf("\n");
+            return false;
+        }
+
+        // Compare encode (using point_a as input)
+        hindex_t h_a = a.encode(point_a.data(), m, n);
+        hindex_t h_b = b.encode(point_a.data(), m, n);
+
+        if (h_a != h_b) {
+            printf("MISMATCH encode at point=");
+            print_point(point_a.data(), n);
+            printf(":\n  %s: ", a.name);
+            print_h128(h_a);
+            printf("\n  %s: ", b.name);
+            print_h128(h_b);
+            printf("\n");
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool compare_shape(const HilbertImpl& a, const HilbertImpl& b,
+                          const std::vector<int>& m_vec) {
+    tests_run++;
+
+    const int* m = m_vec.data();
+    int n = (int)m_vec.size();
+
+    log("  Comparing m=");
+    if (verbose) {
+        print_shape(m, n);
+        printf(" (%llu points)...", 1ULL << sum_bits(m, n));
+        fflush(stdout);
+    }
+
+    if (compare_implementations(a, b, m, n)) {
+        tests_passed++;
+        log(" OK\n");
+        return true;
+    } else {
+        log(" FAIL\n");
+        return false;
+    }
+}
+
+static bool compare_exhaustive_2d(const HilbertImpl& a, const HilbertImpl& b) {
+    log("Comparing 2D (exponents 0-10):\n");
+    bool all_pass = true;
+
+    for (int m0 = 0; m0 <= 10; m0++) {
+        for (int m1 = 0; m1 <= 10; m1++) {
+            if (m0 == 0 && m1 == 0) continue;
+            if (m0 + m1 > 20) continue;  // Max 1M points per shape
+            if (!compare_shape(a, b, {m0, m1})) {
+                all_pass = false;
+            }
+        }
+    }
+    return all_pass;
+}
+
+static bool compare_exhaustive_3d(const HilbertImpl& a, const HilbertImpl& b) {
+    log("Comparing 3D (exponents 0-7):\n");
+    bool all_pass = true;
+
+    for (int m0 = 0; m0 <= 7; m0++) {
+        for (int m1 = 0; m1 <= 7; m1++) {
+            for (int m2 = 0; m2 <= 7; m2++) {
+                if (m0 == 0 && m1 == 0 && m2 == 0) continue;
+                if (m0 + m1 + m2 > 20) continue;  // Max 1M points per shape
+                if (!compare_shape(a, b, {m0, m1, m2})) {
+                    all_pass = false;
+                }
+            }
+        }
+    }
+    return all_pass;
+}
+
+static bool compare_exhaustive_4d(const HilbertImpl& a, const HilbertImpl& b) {
+    log("Comparing 4D (exponents 0-5):\n");
+    bool all_pass = true;
+
+    for (int m0 = 0; m0 <= 5; m0++) {
+        for (int m1 = 0; m1 <= 5; m1++) {
+            for (int m2 = 0; m2 <= 5; m2++) {
+                for (int m3 = 0; m3 <= 5; m3++) {
+                    if (m0 == 0 && m1 == 0 && m2 == 0 && m3 == 0) continue;
+                    if (m0 + m1 + m2 + m3 > 20) continue;  // Max 1M points per shape
+                    if (!compare_shape(a, b, {m0, m1, m2, m3})) {
+                        all_pass = false;
+                    }
+                }
+            }
+        }
+    }
+    return all_pass;
+}
+
+static bool compare_exhaustive_5d(const HilbertImpl& a, const HilbertImpl& b) {
+    log("Comparing 5D (exponents 0-4):\n");
+    bool all_pass = true;
+
+    for (int m0 = 0; m0 <= 4; m0++) {
+        for (int m1 = 0; m1 <= 4; m1++) {
+            for (int m2 = 0; m2 <= 4; m2++) {
+                for (int m3 = 0; m3 <= 4; m3++) {
+                    for (int m4 = 0; m4 <= 4; m4++) {
+                        if (m0 == 0 && m1 == 0 && m2 == 0 && m3 == 0 && m4 == 0) continue;
+                        if (m0 + m1 + m2 + m3 + m4 > 20) continue;
+                        if (!compare_shape(a, b, {m0, m1, m2, m3, m4})) {
+                            all_pass = false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return all_pass;
+}
+
+static bool compare_exhaustive_6d(const HilbertImpl& a, const HilbertImpl& b) {
+    log("Comparing 6D (exponents 0-3):\n");
+    bool all_pass = true;
+
+    for (int m0 = 0; m0 <= 3; m0++) {
+        for (int m1 = 0; m1 <= 3; m1++) {
+            for (int m2 = 0; m2 <= 3; m2++) {
+                for (int m3 = 0; m3 <= 3; m3++) {
+                    for (int m4 = 0; m4 <= 3; m4++) {
+                        for (int m5 = 0; m5 <= 3; m5++) {
+                            if (m0 == 0 && m1 == 0 && m2 == 0 && m3 == 0 && m4 == 0 && m5 == 0) continue;
+                            if (m0 + m1 + m2 + m3 + m4 + m5 > 18) continue;
+                            if (!compare_shape(a, b, {m0, m1, m2, m3, m4, m5})) {
+                                all_pass = false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return all_pass;
+}
+#endif
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 static void usage(const char* prog) {
     printf("Usage: %s [-v] [-h]\n", prog);
-    printf("  -v    Verbose output\n");
-    printf("  -h    Show this help\n");
+    printf("  -v         Verbose output\n");
+    printf("  -h         Show this help\n");
+#ifdef WITH_LEAN
+    printf("  --lean     Test Lean implementation\n");
+    printf("  --compare  Compare C vs Lean implementations\n");
+#endif
 }
 
 int main(int argc, char* argv[]) {
+    bool test_lean = false;
+    bool compare_mode = false;
+
     // Parse arguments
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-v") == 0) {
@@ -398,6 +635,12 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             usage(argv[0]);
             return 0;
+#ifdef WITH_LEAN
+        } else if (strcmp(argv[i], "--lean") == 0) {
+            test_lean = true;
+        } else if (strcmp(argv[i], "--compare") == 0) {
+            compare_mode = true;
+#endif
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
             usage(argv[0]);
@@ -405,18 +648,67 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    printf("Testing %s implementation\n", affine_impl.name);
+#ifdef WITH_LEAN
+    // Initialize Lean if needed
+    if (test_lean || compare_mode) {
+        printf("Initializing Lean runtime...\n");
+        if (!init_lean()) {
+            return 1;
+        }
+        printf("Lean runtime initialized.\n\n");
+    }
+
+    if (compare_mode) {
+        printf("Comparing %s vs %s implementations\n", affine_impl.name, lean_impl.name);
+        printf("========================================\n");
+
+        bool all_pass = true;
+
+        all_pass &= compare_exhaustive_2d(affine_impl, lean_impl);
+        all_pass &= compare_exhaustive_3d(affine_impl, lean_impl);
+        all_pass &= compare_exhaustive_4d(affine_impl, lean_impl);
+        all_pass &= compare_exhaustive_5d(affine_impl, lean_impl);
+        all_pass &= compare_exhaustive_6d(affine_impl, lean_impl);
+
+        printf("========================================\n");
+        printf("Results: %d/%d comparisons passed\n", tests_passed, tests_run);
+
+        finalize_lean();
+
+        if (all_pass) {
+            printf("ALL COMPARISONS PASSED\n");
+            return 0;
+        } else {
+            printf("SOME COMPARISONS FAILED\n");
+            return 1;
+        }
+    }
+
+    HilbertImpl& impl = test_lean ? lean_impl : affine_impl;
+#else
+    (void)test_lean;
+    (void)compare_mode;
+    HilbertImpl& impl = affine_impl;
+#endif
+
+    printf("Testing %s implementation\n", impl.name);
     printf("========================================\n");
 
     bool all_pass = true;
 
-    all_pass &= test_named_shapes(affine_impl);
-    all_pass &= test_exhaustive_2d(affine_impl);
-    all_pass &= test_exhaustive_3d(affine_impl);
-    all_pass &= test_exhaustive_4d(affine_impl);
+    all_pass &= test_named_shapes(impl);
+    all_pass &= test_exhaustive_2d(impl);
+    all_pass &= test_exhaustive_3d(impl);
+    all_pass &= test_exhaustive_4d(impl);
 
     printf("========================================\n");
     printf("Results: %d/%d tests passed\n", tests_passed, tests_run);
+
+#ifdef WITH_LEAN
+    if (test_lean) {
+        finalize_lean();
+    }
+#endif
 
     if (all_pass) {
         printf("ALL TESTS PASSED\n");
