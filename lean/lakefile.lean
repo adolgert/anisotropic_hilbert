@@ -10,3 +10,7 @@ require mathlib from git
 @[default_target]
 lean_lib «AnisoHilbert» where
   roots := #[`AnisoHilbert]
+
+-- Executable target for testing the FFI exports
+lean_exe «hilbert_test» where
+  root := `AnisoHilbert.CExport
