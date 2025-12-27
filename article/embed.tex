@@ -87,84 +87,164 @@ We think of a Gray code as a function on integers, $\{0, \ldots, 2^n - 1\} \to \
 Here it is a map $\gc(\nu)$ from $V_n$ to $V_n$. Assume it has an entry and exit that are
 adjacent (which is always true according to Alber and Niedermeir), where we the
 entry is at the origin $\mathbf{0}$ and the exit is adjacent at the last index,
-$\mathbf{0}+\epsilon_{n-1}$.
-
+$\mathbf{0}+\epsilon_{n-1}$. This exit direction has proven mentally inconvenient
+to Butz and Hamilton, and so it is now. Rotate the Gray code with a circular rotation
+by 1 so that the exit is in the $\epsilon_0$ direction. We will call this our gray code.
 
 
 \subsection{Affine Transforms on Directed Edges of the Hypercube}
- \begin{theorem}
-  Let $n \ge 1$. The set of affine transforms $\{S_{e,\delta} : e \in \mathbb{F}_2^n,\, \delta \in \mathbb{Z}_n\}$
-  is in bijection with the set of directed edges of the $n$-dimensional hypercube.
-  \end{theorem}
+The Hilbert curve requires transformations of the sub-hypercubes. A general transformation
+could permute all matrices. What we require is that the entry and exit be in the
+corner and direction we need, so we need to choose among all possible directed
+edges on the $n$-dimensional hypercube, and we can do that with a rotation and
+translation only, as described here.
 
-  \begin{proof}
-  Let $V = \mathbb{F}_2^n$ be the vector space over $\mathbb{F}_2$ with standard basis
-  $\{\mathbf{e}_0, \ldots, \mathbf{e}_{n-1}\}$.
-  The vertices of the $n$-cube are the elements of $V$, and two vertices are adjacent
-  if and only if they differ by some $\mathbf{e}_a$.
+\begin{theorem}
+Let $n \ge 1$. The set of affine transforms $\{S_{e,\delta} : e \in \mathbb{F}_2^n,\, \delta \in \mathbb{Z}_n\}$
+is in bijection with the set of directed edges of the $n$-dimensional hypercube.
+\end{theorem}
 
-  A \emph{directed edge} is an ordered pair $(u, u + \mathbf{e}_a)$ where $u \in V$ and $a \in \mathbb{Z}_n$.
+\begin{proof}
+Let $V = \mathbb{F}_2^n$ be the vector space over $\mathbb{F}_2$ with standard basis
+$\{\mathbf{e}_0, \ldots, \mathbf{e}_{n-1}\}$.
+The vertices of the $n$-cube are the elements of $V$, and two vertices are adjacent
+if and only if they differ by some $\mathbf{e}_a$.
 
-  \medskip
-  \noindent\textbf{Counting.}
-  There are $2^n$ choices for $u$ and $n$ choices for $a$, giving $n \cdot 2^n$ directed edges.
-  There are $2^n$ choices for $e$ and $n$ choices for $\delta$, giving $n \cdot 2^n$ transforms.
+A \emph{directed edge} is an ordered pair $(u, u + \mathbf{e}_a)$ where $u \in V$ and $a \in \mathbb{Z}_n$.
 
-  \medskip
-  \noindent\textbf{The transform.}
-  Let $\rho \in \mathrm{Sym}(\mathbb{Z}_n)$ be the cyclic permutation $\rho(a) = (a+1) \bmod n$,
-  acting on $V$ by $(\rho \cdot v)(a) = v(\rho^{-1}(a))$.
-  Then $\rho \cdot \mathbf{e}_j = \mathbf{e}_{(j+1) \bmod n}$, and hence
-  $\rho^{-\delta} \cdot \mathbf{e}_j = \mathbf{e}_{(j-\delta) \bmod n}$.
+\medskip
+\noindent\textbf{Counting.}
+There are $2^n$ choices for $u$ and $n$ choices for $a$, giving $n \cdot 2^n$ directed edges.
+There are $2^n$ choices for $e$ and $n$ choices for $\delta$, giving $n \cdot 2^n$ transforms.
 
-  Define $S_{e,\delta} : V \to V$ by
-  \[
-  S_{e,\delta}(x) = \rho^{-\delta} \cdot x + e.
-  \]
+\medskip
+\noindent\textbf{The transform.}
+Let $\rho \in \mathrm{Sym}(\mathbb{Z}_n)$ be the cyclic permutation $\rho(a) = (a+1) \bmod n$,
+acting on $V$ by $(\rho \cdot v)(a) = v(\rho^{-1}(a))$.
+Then $\rho \cdot \mathbf{e}_j = \mathbf{e}_{(j+1) \bmod n}$, and hence
+$\rho^{-\delta} \cdot \mathbf{e}_j = \mathbf{e}_{(j-\delta) \bmod n}$.
 
-  \medskip
-  \noindent\textbf{Reference edge.}
-  Fix the directed edge $R = (0, \mathbf{e}_{n-1})$ as the reference.
-  Under $S_{e,\delta}$:
-  \begin{align*}
-  S_{e,\delta}(0) &= e, \\
-  S_{e,\delta}(\mathbf{e}_{n-1}) &= \mathbf{e}_{(n-1-\delta) \bmod n} + e.
-  \end{align*}
-  Thus $S_{e,\delta}$ maps $R$ to the directed edge from $e$ along axis $(n-1-\delta) \bmod n$.
+Define $S_{e,\delta} : V \to V$ by
+\[
+S_{e,\delta}(x) = \rho^{-\delta} \cdot x + e.
+\]
 
-  \medskip
-  \noindent\textbf{Surjectivity.}
-  Given any directed edge $(u, u + \mathbf{e}_a)$, choose
-  \[
-  e = u, \qquad \delta = (n - 1 - a) \bmod n.
-  \]
-  Then $S_{e,\delta}(R) = (u, u + \mathbf{e}_a)$.
+\medskip
+\noindent\textbf{Reference edge.}
+Fix the directed edge $R = (0, \mathbf{e}_{n-1})$ as the reference.
+Under $S_{e,\delta}$:
+\begin{align*}
+S_{e,\delta}(0) &= e, \\
+S_{e,\delta}(\mathbf{e}_{n-1}) &= \mathbf{e}_{(n-1-\delta) \bmod n} + e.
+\end{align*}
+Thus $S_{e,\delta}$ maps $R$ to the directed edge from $e$ along axis $(n-1-\delta) \bmod n$.
 
-  For the reverse orientation $(u + \mathbf{e}_a, u)$, choose
-  \[
-  e = u + \mathbf{e}_a, \qquad \delta = (n - 1 - a) \bmod n.
-  \]
-  Then:
-  \begin{align*}
-  S_{e,\delta}(0) &= u + \mathbf{e}_a, \\
-  S_{e,\delta}(\mathbf{e}_{n-1}) &= (u + \mathbf{e}_a) + \mathbf{e}_a = u.
-  \end{align*}
+\medskip
+\noindent\textbf{Surjectivity.}
+Given any directed edge $(u, u + \mathbf{e}_a)$, choose
+\[
+e = u, \qquad \delta = (n - 1 - a) \bmod n.
+\]
+Then $S_{e,\delta}(R) = (u, u + \mathbf{e}_a)$.
 
-  \medskip
-  \noindent\textbf{Injectivity.}
-  The map $S_{e,\delta} \mapsto S_{e,\delta}(R)$ sends distinct pairs $(e, \delta)$ to distinct
-  directed edges, since $e$ determines the starting vertex and $\delta$ determines the axis.
+For the reverse orientation $(u + \mathbf{e}_a, u)$, choose
+\[
+e = u + \mathbf{e}_a, \qquad \delta = (n - 1 - a) \bmod n.
+\]
+Then:
+\begin{align*}
+S_{e,\delta}(0) &= u + \mathbf{e}_a, \\
+S_{e,\delta}(\mathbf{e}_{n-1}) &= (u + \mathbf{e}_a) + \mathbf{e}_a = u.
+\end{align*}
 
-  \medskip
-  \noindent\textbf{Conclusion.}
-  The map $S_{e,\delta} \mapsto S_{e,\delta}(R)$ is a bijection between
-  $\{S_{e,\delta}\}$ and directed edges of the $n$-cube.
-  \end{proof}
+\medskip
+\noindent\textbf{Injectivity.}
+The map $S_{e,\delta} \mapsto S_{e,\delta}(R)$ sends distinct pairs $(e, \delta)$ to distinct
+directed edges, since $e$ determines the starting vertex and $\delta$ determines the axis.
 
-  \begin{lemma}[Interpretation for Hilbert curves]
-  The state $(e, \delta)$ of a Hilbert curve encodes exactly the information needed to specify
-  an entry vertex and an exit direction. The bijection above shows this encoding is tight:
-  no redundancy, no missing configurations.
-  \end{lemma}
+\medskip
+\noindent\textbf{Conclusion.}
+The map $S_{e,\delta} \mapsto S_{e,\delta}(R)$ is a bijection between
+$\{S_{e,\delta}\}$ and directed edges of the $n$-cube.
+\end{proof}
+
+\begin{lemma}[Interpretation for Hilbert curves]
+The state $(e, \delta)$ of a Hilbert curve encodes exactly the information needed to specify
+an entry vertex and an exit direction. The bijection above shows this encoding is tight:
+no redundancy, no missing configurations.
+\end{lemma}
+
+
+\section{Isotropic Hilbert Curve}
+
+An isotropic Hilbert curve is defined on a lattice of extent $2^m$ in each of
+$k$ dimensions. We can choose a regular form of this Hilbert curve by choosing
+a single Gray code for $k$ dimensions. Any point in the Hilbert curve
+resides within $m$ nested Gray codes of dimension $k$.
+
+A parent hypercube has $k$ diemensions and is dyadic, so it's of extent 2 in
+every dimension. At each lattice point is a child hypercube. The child hypercube, $w$,
+will have its own Gray code with an entry point $\alpha_w$ and exit at $\omega_w$.
+Internal to the Gray code for the child, we have defined above that the entry is
+the origin and the exit is in the $\epsilon_0$ direction from the origin.
+
+If we transform the child coordinates into the parent's space with a transform
+that depends on the particular child $w$ (call it $S_w$), then the adjacency criterion is
+that $S_w\omega_{w} + S_{w+1}\alpha_{w+1} = \epsilon_g$. Here $S_w$ is a transform
+acting on the point in $V_n$ and $\epsilon_g$ is along the direction of the Hilbert
+curve, so $\gc(w) + \gc(w+1) = \epsilon_g$.
+
+Work through that.
+$$
+\begin{aligned}
+S^k_w(\omega_w) + S^k_{w+1}\alpha_{w+1} &= \epsilon^k_g \\
+S^k_w(\alpha_w + \epsilon_0) + S^k_{w+1}\alpha_{w+1} &= \epsilon^k_g \\
+\rho^{d_w}\alpha_w + e_w + \rho^{d_w}\epsilon_0 + e_w +  \rho^{d_{w+1}}\alpha_{w+1} + e_{w+1} &= \epsilon^k_g \\
+\rho^{d_w}\epsilon_0 + e_{w+1} &= \epsilon^k_g \\
+\epsilon_{d_w} + e_{w+1} &= \epsilon^k_g
+\end{aligned}
+$$
+
+
+\subsection{Embedding Transform}
+
+We start with a Hilbert curve for which we know that
+$$
+S^k_w(\alpha_w + \epsilon_0) + S^k_{w+1}\alpha_{w+1} = \epsilon^k_g
+$$
+Here the $k$ subscript says that the curve is defined in $k$ dimensions.
+
+Given a transform specified by $e$ and $d$, we apply it during encoding with
+$$
+    w = \gc^{-1}(S^{-1(k)}_{e,d}(p))
+$$
+The transform $S^{-1(k)}_{e,d}(p)$ is an affine transform on a point $p$ in the $V_n$
+space. The forward transform is a rotation and then an additon.
+$$
+    S^{(k)}_{e,d}(w) = \rho^d w + e
+$$
+The reverse is the opposite.
+$$
+    S^{-1(k)}_{e,d}(p) = \rho^{-d}(p + e)
+$$
+In $k$ dimensions a rotation is defined on $V_n$ as a rotation of the indices,
+$a$, in the opposite direction.
+$$
+    \rho \nu(a) = \nu(\rho^{-1} a)
+$$
+
+If I take an affine transform in $k$ dimensions put it into $k+\Delta$ dimensions
+by modifying $e$ and $d$ by putting $e$ as the high bits of a $k+\Delta$ dimensional
+vector and modify $d$ by increasing it by $\Delta$. The embedded
+transform $S'_{e',d'}$ acts on a $(k+\Delta)$-bit vector $x$ as:
+$$
+S'_{e',d'}(x) = \rho^{d + \Delta}x \oplus (\rho^{\Delta}e)
+$$
+The new axes occupy positions $0, 1, \ldots, \Delta-1$, while the original $k$
+axes shift to positions $\Delta, \Delta+1, \ldots, k+\Delta-1$. Since the new
+axes have entry bit 0 (from the left-shift) and the rotation increases by $\Delta$,
+the transform acts as identity on the new low-order bits while preserving the original
+transform's action on the high-order bits.
+
 
 \end{document}
