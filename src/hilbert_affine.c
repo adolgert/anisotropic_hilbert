@@ -19,6 +19,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <assert.h>
 
 #define MAX_DIMS 32
 #define MAX_LEVELS 32
@@ -31,6 +32,13 @@ typedef struct {
   uint32_t e; /* entry mask in the current active list */
   uint32_t d; /* direction index in the current active list */
 } hilbert_state_t;
+
+typedef struct {
+  int mmax; /* max(extents bits) */
+  int total_bits; /* sum(extents bits)*/
+  int k_level[MAX_LEVELS + 1]; /* Number of active axes at level */
+  int axes_ordered[MAX_DIMS];
+} hilbert_curve_t;
 
 static inline uint32_t mask_bits(uint32_t bits) {
   return (bits >= 32u) ? 0xFFFFFFFFu : ((1u << bits) - 1u);
@@ -135,12 +143,9 @@ static void sort_axes_by_priority(const int *m, int n, int *order) {
   }
 }
 
-static bool build_active_axes(const int *m, int n,
-                              int *mmax_out, int *total_bits_out,
-                              int axes_level[MAX_LEVELS + 1][MAX_DIMS],
-                              int k_level[MAX_LEVELS + 1],
-                              int pos_level[MAX_LEVELS + 1][MAX_DIMS]) {
-  if (!m || n <= 0 || n > MAX_DIMS) return false;
+
+static bool build_active_axes(const int *m, int n, hilbert_curve_t *curve) {
+  if (!m || n <= 0 || n > MAX_DIMS || !curve) return false;
 
   int mmax = 0;
   int total_bits = 0;
@@ -151,45 +156,30 @@ static bool build_active_axes(const int *m, int n,
   }
   if (total_bits > MAX_INDEX_BITS) return false;
 
-  int order[MAX_DIMS];
-  sort_axes_by_priority(m, n, order);
+  curve->mmax = mmax;
+  curve->total_bits = total_bits;
 
-  k_level[0] = 0;
-  for (int ax = 0; ax < n; ax++) pos_level[0][ax] = -1;
+  sort_axes_by_priority(m, n, curve->axes_ordered);
+  curve->k_level[0] = 0;
 
+  int axis_idx = 0;
   for (int s = 1; s <= mmax; s++) {
-    int k = 0;
-    for (int i = 0; i < n; i++) {
-      int ax = order[i];
-      if (m[ax] >= s) {
-        axes_level[s][k++] = ax;
-      }
+    while (axis_idx < n && m[curve->axes_ordered[axis_idx]] < s) {
+      axis_idx++;
     }
-    k_level[s] = k;
-    for (int ax = 0; ax < n; ax++) pos_level[s][ax] = -1;
-    for (int j = 0; j < k; j++) {
-      pos_level[s][axes_level[s][j]] = j;
-    }
+    curve->k_level[s] = n - axis_idx;
   }
 
-  if (mmax_out) *mmax_out = mmax;
-  if (total_bits_out) *total_bits_out = total_bits;
   return true;
 }
 
-static void embed_state(const int *A_old, int k_old, const int *pos_new,
+
+static void embed_state(hilbert_curve_t *curve, int s,
                         uint32_t e_old, uint32_t d_old,
                         uint32_t *e_new, uint32_t *d_new) {
-  uint32_t e = 0u;
-  for (int j = 0; j < k_old; j++) {
-    if ((e_old >> j) & 1u) {
-      int new_pos = pos_new[A_old[j]];
-      e |= 1u << new_pos;
-    }
-  }
-  int dir_axis = A_old[d_old];
-  *e_new = e;
-  *d_new = (uint32_t)pos_new[dir_axis];
+  int k_shift = curve->k_level[s - 1] - curve->k_level[s];
+  *e_new = e_old << k_shift;
+  *d_new = d_old + (uint32_t)k_shift;
 }
 
 int hilbert_affine_index_bits(const int *m, int n) {
@@ -203,25 +193,23 @@ int hilbert_affine_index_bits(const int *m, int n) {
 }
 
 hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n) {
-  int mmax = 0;
-  int total_bits = 0;
-  int axes_level[MAX_LEVELS + 1][MAX_DIMS];
-  int pos_level[MAX_LEVELS + 1][MAX_DIMS];
-  int k_level[MAX_LEVELS + 1];
+  hilbert_curve_t curve = {0};
 
   if (!point || !m) return (hindex_t)0;
-  if (!build_active_axes(m, n, &mmax, &total_bits, axes_level, k_level, pos_level)) {
+  if (!build_active_axes(m, n, &curve)) {
     return (hindex_t)0;
   }
-  if (mmax == 0) return (hindex_t)0;
+  if (curve.mmax == 0) return (hindex_t)0;
 
   hilbert_state_t st = {0u, 0u};
   hindex_t h = 0;
 
-  for (int s = mmax; s >= 1; s--) {
-    const int *A = axes_level[s];
-    int k = k_level[s];
+  for (int s = curve.mmax; s >= 1; s--) {
+    int k = curve.k_level[s];
     if (k == 0) return (hindex_t)0;
+
+    int first_axis = n - k;
+    const int *A = curve.axes_ordered + first_axis;
 
     const uint32_t mask = mask_bits((uint32_t)k);
     st.e &= mask;
@@ -243,10 +231,10 @@ hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n) {
     st.e = (st.e ^ rotl_bits(entry, st.d + 1u, (uint32_t)k)) & mask;
     st.d = (st.d + child_dir(w, (uint32_t)k) + 1u) % (uint32_t)k;
 
-    if (s > 1 && k_level[s - 1] > k) {
+    if (s > 1 && curve.k_level[s - 1] > k) {
       uint32_t e_new = 0u;
       uint32_t d_new = 0u;
-      embed_state(A, k, pos_level[s - 1], st.e, st.d, &e_new, &d_new);
+      embed_state(&curve, s, st.e, st.d, &e_new, &d_new);
       st.e = e_new;
       st.d = d_new;
     }
@@ -259,24 +247,21 @@ void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point) {
   if (!point || !m || n <= 0 || n > MAX_DIMS) return;
   memset(point, 0, (size_t)n * sizeof(coord_t));
 
-  int mmax = 0;
-  int total_bits = 0;
-  int axes_level[MAX_LEVELS + 1][MAX_DIMS];
-  int pos_level[MAX_LEVELS + 1][MAX_DIMS];
-  int k_level[MAX_LEVELS + 1];
+  hilbert_curve_t curve = {0};
 
-  if (!build_active_axes(m, n, &mmax, &total_bits, axes_level, k_level, pos_level)) {
+  if (!build_active_axes(m, n, &curve)) {
     return;
   }
-  if (mmax == 0) return;
+  if (curve.mmax == 0) return;
 
-  int bit_pos = total_bits;
+  int bit_pos = curve.total_bits;
   hilbert_state_t st = {0u, 0u};
 
-  for (int s = mmax; s >= 1; s--) {
-    const int *A = axes_level[s];
-    int k = k_level[s];
+  for (int s = curve.mmax; s >= 1; s--) {
+    int k = curve.k_level[s];
     if (k == 0) return;
+    int first_axis = n - k;
+    const int *A = curve.axes_ordered + first_axis;
 
     const uint32_t mask = mask_bits((uint32_t)k);
     st.e &= mask;
@@ -297,10 +282,10 @@ void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point) {
     st.e = (st.e ^ rotl_bits(entry, st.d + 1u, (uint32_t)k)) & mask;
     st.d = (st.d + child_dir(w, (uint32_t)k) + 1u) % (uint32_t)k;
 
-    if (s > 1 && k_level[s - 1] > k) {
+    if (s > 1 && curve.k_level[s - 1] > k) {
       uint32_t e_new = 0u;
       uint32_t d_new = 0u;
-      embed_state(A, k, pos_level[s - 1], st.e, st.d, &e_new, &d_new);
+      embed_state(&curve, s, st.e, st.d, &e_new, &d_new);
       st.e = e_new;
       st.d = d_new;
     }
