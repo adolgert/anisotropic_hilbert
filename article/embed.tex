@@ -42,6 +42,8 @@
 \newcommand{\SHR}{\mathbin{\triangleright}}    % Shift right
 \newcommand{\ROTL}{\mathbin{\circlearrowleft}} % Rotate left
 \newcommand{\ROTR}{\mathbin{\circlearrowright}}% Rotate right
+\newcommand{\vplus}{\mathbin{\oplus}}   % plus
+\newcommand{\vtimes}{\mathbin{\vtimes}}
 
 % Convenient shortcuts
 \newcommand{\gc}{\mathrm{G}}                  % Gray code function
@@ -52,6 +54,8 @@
 \newcommand{\exitpt}{\mathrm{f}}               % exit point function (f for "finish")
 \newcommand{\dir}{\mathrm{d}}                  % direction function
 \newcommand{\gcr}{\mathrm{gcr}}                % Gray code rank
+\newcommand{\dk}{dk}
+\newcommand{\embed}{\kappa}
 
 % Sets
 \newcommand{\Z}{\mathbb{Z}}                    % Integers
@@ -83,6 +87,22 @@ Use roman for integers. Use Greek letters for objects that live in $V_n=GF(2)^n$
 The function $b(i)$ converts an integer to $V_n$.
 
 \subsection{Gray Code}
+Let $Q_k=\{0,1\}^k\cong \mathbb{F}_2^k$.
+
+A directed Gray code in dimension $k$ is a Hamiltonian path
+$$
+    \gc_k : \{0,\ldots,2^k-1\} \rightarrow Q_k
+$$
+such that consecutive vertices differ in exactly one coordinate.
+$$
+    \gc_k(i+1) = \gc_k(i)\XOR \epsilon_{\sigma_k(i)}\quad\text{for some}\quad \sigma_k(i)\in\{0,\ldots,k-1\}.
+$$
+Equivalently, we can define the step vector
+$$
+    g_k(i)=\gc_k(i)\XOR\gc_k(i+1)\in\{\epsilon_0,\ldots,\epsilon_{k-1}\}.
+$$
+
+
 We think of a Gray code as a function on integers, $\{0, \ldots, 2^n - 1\} \to \{0, \ldots, 2^n - 1\}$.
 Here it is a map $\gc(\nu)$ from $V_n$ to $V_n$. Assume it has an entry and exit that are
 adjacent (which is always true according to Alber and Niedermeir), where we the
@@ -196,7 +216,7 @@ curve, so $\gc(i) + \gc(i+1) = \epsilon_g$.
 $$
 \begin{aligned}
     \alpha_i & = S_i(\mathbf{0})=e_i \\
-    \omega_i & = S_i(\mathbf{0} + \epsilon_0)= \rho^{d_i}\mathbf{0} + \rho^{d_i}\epsilon_0 + e_{i}=\epsilon_{d_i}+ e_{i} \\
+    \omega_i & = S_i(\mathbf{0} + \epsilon_0)= \rho^{d_i}\epsilon_0 + e_{i}=\epsilon_{d_i}+ e_{i} \\
     \alpha_{i+1} & = e_{i+1}
 \end{aligned}
 $$
@@ -204,10 +224,14 @@ $$
 Work through that. All values are in dimension $k$.
 $$
 \begin{aligned}
-    \omega_i + \alpha_{i+1} & = \epsilon_g \\
-    \epsilon_{d_i}+ e_{i}+e_{i+1} & = \epsilon_g
+    \omega_i + \alpha_{i+1} & = g_k(i) \\
+    \epsilon_{d_i}+ e_{i}+e_{i+1} & = g_k(i)
 \end{aligned}
 $$
+
+A $k$-dimensional Hilbert curve is defined by a set of child transforms
+$\{S_i^{(k)}\}_{i=0}^{2^k-1}$ such that, after placing child $i$ with $S_i^{(k)}$,
+the exit of child $i$ meets the entry of child $i+1$ across the shared face.
 
 \subsection{Embedding Transform}
 
@@ -236,40 +260,73 @@ $$
     \rho \nu(a) = \nu(\rho^{-1} a)
 $$
 
-If I take an affine transform in $k$ dimensions put it into $k+\Delta$ dimensions
-by modifying $e$ and $d$ by putting $e$ as the high bits of a $k+\Delta$ dimensional
-vector and modify $d$ by increasing it by $\Delta$. The embedded
-transform $S'_{e',d'}$ acts on a $(k+\Delta)$-bit vector $x$ as:
+Define a coordinate embedding transform.
 $$
-S'_{e',d'}(x) = \rho^{d + \Delta}x \oplus (\rho^{\Delta}e)
+  \embed_{\dk}: Q_k\rightarrow Q_{k+\dk},\quad \embed_{\dk}(x_0,\ldots,x_{n-1})=(0,\ldots,0,x_0,\ldots,x_k-1)
 $$
-The new axes occupy positions $0, 1, \ldots, \Delta-1$, while the original $k$
-axes shift to positions $\Delta, \Delta+1, \ldots, k+\Delta-1$. Since the new
-axes have entry bit 0 (from the left-shift) and the rotation increases by $\Delta$,
+This identifies $Q_k$ with the face
+$$
+    F := \{y\in Q_{k+\dk}:y_0=\cdots=y_{\dk-1}=0\subseteq Q_{k+\dk} \}
+$$
+Because this embedding is linear over $\mathbb{F}_2$,
+$$
+    \embed_{\dk}\nu\vplus \embed_{\dk}\upsilon = \embed_{\dk}(\nu\vplus\upsilon),
+$$
+applying embedded transforms to the embedded adjacency gives a transformed
+constitutive equation.
+$$
+    \hat{S}_{i}^{(k+\dk)}\embed_{\dk}\epsilon_0 \vplus
+    \hat{S}_{i+1}^{(k+\dk)}\embed_{\dk}\mathbf{0} = \embed_{\dk}g_k(i)
+$$
+
+
+If I take an affine transform in $k$ dimensions put it into $k+\dk$ dimensions
+by modifying $e$ and $d$ by putting $e$ as the high bits of a $k+\dk$ dimensional
+vector and modify $d$ by increasing it by $\dk$. The embedded
+transform $S'_{e',d'}$ acts on a $(k+\dk)$-bit vector $x$ as:
+$$
+S'_{e',d'}(x) = \rho^{d + \dk}x \oplus (\rho^{\dk}e)
+$$
+The new axes occupy positions $0, 1, \ldots, \dk-1$, while the original $k$
+axes shift to positions $\dk, \dk+1, \ldots, k+\dk-1$. Since the new
+axes have entry bit 0 (from the left-shift) and the rotation increases by $\dk$,
 the transform acts as identity on the new low-order bits while preserving the original
 transform's action on the high-order bits.
 
-    
-If it is true that $\epsilon_{d_i}+ e_{i}+e_{i+1} = \epsilon_g$ then when we
+
+Remember that we assume $\epsilon_{d_i}+ e_{i}+e_{i+1} = g_k(i)$. When we
 modify them as above,
 $$
 \begin{aligned}
-    \alpha_i & = S'_i(\mathbf{0})=\rho^{\Delta}e_i \\
+    \alpha_i & = S'_i(\mathbf{0})=\rho^{\dk}e_i \\
     \omega_i & = S'_i(\mathbf{0} + \epsilon_0)=
-        \rho^{d_i + \Delta}\mathbf{0} + \rho^{d_i + \Delta}\epsilon_0 + \rho^{\Delta}e_{i}
-        =\epsilon_{d_i+ \Delta}+ \rho^{\Delta} e_{i} \\
-    \alpha_{i+1} & = \rho^{\Delta}e_{i+1}
+        \rho^{d_i + \dk}\epsilon_0 + \rho^{\dk}e_{i}
+        =\epsilon_{d_i+ \dk}+ \rho^{\dk} e_{i} \\
+    \alpha_{i+1} & = \rho^{\dk}e_{i+1}
 \end{aligned}
 $$
-In the $k+\Delta$ dimensions this becomes:
+In the $k+\dk$ dimensions this becomes:
 $$
 \begin{aligned}
-    \omega_i + \alpha_{i+1} & = \epsilon'_g \\
-    \epsilon_{d_i+ \Delta}+ \rho^{\Delta} e_{i}+\rho^{\Delta}e_{i+1} & = \epsilon'_g
+    \omega_i + \alpha_{i+1} & = g_{(k+1)}(i) \\
+    \epsilon_{d_i+ \dk}+ \rho^{\dk} e_{i}+\rho^{\dk}e_{i+1} & = \rho^{\dk}g_{(k+1)}(i)
 \end{aligned}
 $$
-What happens to $\epsilon_g$ in the new dimensions? We need it to be true
-that the embedded Gray code is $\rho^{\Delta}\epsilon_g$ compared to the $k$-dimensional one.
+In other words, by embedding the transform that defines the child space,
+we are guaranteed adjacency in that larger child space as long as the Gray step
+from in the child space is an embedded version of the Gray step in the parent space.
 
+This equation needs to apply for those indices that are used for this level,
+and these are only the high $k$ active axes out of the $k+dk$ total axes. The $i$
+at this level is assigned by the parent, so it runs over $[0,2^k-1]$, but that's
+all that is needed during axis activation.
+
+The final agreement we need is that, in the child layer, we need to be able to
+define orientations for the children such that our boundary conditions are met
+for the layer above. That is that there is an entry at the origin and an exit
+at $\epsilon_0$.
+
+For each child hypercube of the level with $k+\dk$ active dimensions, we can
+use the next Gray code in the given class $\gc_{k+\dk}$.
 
 \end{document}
