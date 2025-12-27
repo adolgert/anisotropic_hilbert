@@ -186,6 +186,29 @@ static bool build_active_axes(const int *m, int n, hilbert_curve_t *curve) {
   return true;
 }
 
+/*
+ * Gather bits from coordinates into a plane value.
+ * Collects bit (s-1) from each active axis into a k-bit plane.
+ */
+static inline uint32_t gather_plane(const coord_t *point, const int *A, int k, int s) {
+  uint32_t plane = 0u;
+  for (int j = 0; j < k; j++) {
+    int ax = A[j];
+    plane |= ((point[ax] >> (s - 1)) & 1u) << j;
+  }
+  return plane;
+}
+
+/*
+ * Scatter bits from a plane value to coordinates.
+ * Distributes each bit of the k-bit plane to bit (s-1) of the corresponding axis.
+ */
+static inline void scatter_plane(coord_t *point, const int *A, int k, int s, uint32_t plane) {
+  for (int j = 0; j < k; j++) {
+    int ax = A[j];
+    point[ax] |= ((plane >> j) & 1u) << (s - 1);
+  }
+}
 
 hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n) {
   hilbert_curve_t curve = {0};
@@ -199,41 +222,42 @@ hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n) {
   hilbert_state_t st = {0u, 0u};
   hindex_t h = 0;
 
-  for (int s = curve.mmax; s >= 1; s--) {
+  int parent_k = curve.k_level[curve.mmax];
+  uint32_t parent_mask = mask_bits((uint32_t)parent_k);
+  uint32_t plane = gather_plane(point, curve.axes_ordered + n - parent_k, parent_k, curve.mmax);
+  uint32_t pre = affine_apply_inv(plane, st.e, st.d, (uint32_t)parent_k);
+  uint32_t w = gray_decode_axis0(pre, (uint32_t)parent_k) & parent_mask;
+  h = (h << parent_k) | (hindex_t)w;
+
+  for (int s = curve.mmax - 1; s >= 1; s--) {
     int k = curve.k_level[s];
     assert(k != 0);
 
-    const uint32_t mask = mask_bits((uint32_t)k);
-    st.e &= mask;
-    st.d %= (uint32_t)k;
+    uint32_t entry = child_entry(w) & parent_mask;
+    st.e = affine_apply(entry, st.e, st.d + 1u, (uint32_t)parent_k);
+    st.d = (st.d + child_dir(w, (uint32_t)parent_k) + 1u) % (uint32_t)parent_k;
 
-    uint32_t plane = 0u;
-
-    int first_axis = n - k;
-    const int *A = curve.axes_ordered + first_axis;
-    for (int j = 0; j < k; j++) {
-      int ax = A[j];
-      plane |= ((point[ax] >> (s - 1)) & 1u) << j;
-    }
-    plane &= mask;
-
-    uint32_t pre = affine_apply_inv(plane, st.e, st.d, (uint32_t)k);
-    uint32_t w = gray_decode_axis0(pre, (uint32_t)k) & mask;
-
-    h = (h << k) | (hindex_t)w;
-
-    uint32_t entry = child_entry(w) & mask;
-    st.e = affine_apply(entry, st.e, st.d + 1u, (uint32_t)k);
-    st.d = (st.d + child_dir(w, (uint32_t)k) + 1u) % (uint32_t)k;
-
-    if (s > 1 && curve.k_level[s - 1] > k) {
+    if (k > parent_k) {
       /* embed state */
-      int k_shift = curve.k_level[s - 1] - k;
+      int k_shift = k - parent_k;
       st.e <<= k_shift;
       st.d += (uint32_t)k_shift;
     }
-  }
+    uint32_t mask = mask_bits((uint32_t)k);
+    st.e &= mask;
+    st.d %= (uint32_t)k;
 
+    int first_axis = n - k;
+    const int *A = curve.axes_ordered + first_axis;
+    plane = gather_plane(point, A, k, s);
+    pre = affine_apply_inv(plane, st.e, st.d, (uint32_t)k);
+    w = gray_decode_axis0(pre, (uint32_t)k) & mask;
+
+    h = (h << k) | (hindex_t)w;
+    
+    parent_k = k;
+    parent_mask = mask;
+  }
   return h;
 }
 
@@ -255,6 +279,9 @@ void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point) {
     int k = curve.k_level[s];
     assert(k != 0);
 
+    int first_axis = n - k;
+    const int *A = curve.axes_ordered + first_axis;
+
     const uint32_t mask = mask_bits((uint32_t)k);
     st.e &= mask;
     st.d %= (uint32_t)k;
@@ -264,13 +291,7 @@ void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point) {
 
     uint32_t g = gray_code_axis0(w, (uint32_t)k);
     uint32_t plane = affine_apply(g, st.e, st.d, (uint32_t)k);
-
-    int first_axis = n - k;
-    const int *A = curve.axes_ordered + first_axis;
-    for (int j = 0; j < k; j++) {
-      int ax = A[j];
-      point[ax] |= ((plane >> j) & 1u) << (s - 1);
-    }
+    scatter_plane(point, A, k, s, plane);
 
     uint32_t entry = child_entry(w) & mask;
     st.e = affine_apply(entry, st.e, st.d + 1u, (uint32_t)k);
