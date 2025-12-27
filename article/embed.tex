@@ -1,4 +1,67 @@
-\documentclass{article}
+\documentclass[11pt]{article}
+
+% ============================================================================
+% PACKAGES
+% ============================================================================
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}      % For \coloneqq and other extensions
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}       % For nice tables
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}       % For customized lists
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
+
+% ============================================================================
+% THEOREM ENVIRONMENTS
+% ============================================================================
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% ============================================================================
+% CUSTOM COMMANDS FOR NOTATION
+% ============================================================================
+% Bit operations (matching Hamilton's notation)
+\newcommand{\XOR}{\mathbin{\veebar}}           % XOR: exclusive or
+\newcommand{\AND}{\mathbin{\wedge}}            % AND
+\newcommand{\OR}{\mathbin{\vee}}               % OR
+\newcommand{\NOT}{\mathord{\sim}}              % NOT (bitwise complement)
+\newcommand{\SHL}{\mathbin{\triangleleft}}     % Shift left
+\newcommand{\SHR}{\mathbin{\triangleright}}    % Shift right
+\newcommand{\ROTL}{\mathbin{\circlearrowleft}} % Rotate left
+\newcommand{\ROTR}{\mathbin{\circlearrowright}}% Rotate right
+
+% Convenient shortcuts
+\newcommand{\gc}{\mathrm{G}}                  % Gray code function
+\newcommand{\gcinv}{\mathrm{gc}^{-1}}          % Gray code inverse
+\newcommand{\bitfn}{\mathrm{bit}}              % bit extraction function
+\newcommand{\tsb}{\mathrm{tsb}}                % trailing set bits
+\newcommand{\entry}{\mathrm{e}}                % entry point function
+\newcommand{\exitpt}{\mathrm{f}}               % exit point function (f for "finish")
+\newcommand{\dir}{\mathrm{d}}                  % direction function
+\newcommand{\gcr}{\mathrm{gcr}}                % Gray code rank
+
+% Sets
+\newcommand{\Z}{\mathbb{Z}}                    % Integers
+\newcommand{\N}{\mathbb{N}}                    % Natural numbers
+\newcommand{\B}{\mathbb{B}}                    % Binary digits {0,1}
+
+% Other
+\newcommand{\encode}{\mathrm{encode}}
+\newcommand{\decode}{\mathrm{decode}}
+
 
 \title{Hilbert Curves for Unequal Dimensions}
 \author{Andrew Dolgert}
@@ -12,6 +75,19 @@ create a lattice-continuous Hilbert curve in $n$-dimensions with unequal extents
 are powers of two.
 This article shows how to construct such a Hilbert curve.
 \end{abstract}
+
+\section{Introduction}
+
+\subsection{Notation}
+Use roman for integers. Use Greek letters for objects that live in $V_n=GF(2)^n$.
+The function $b(i)$ converts an integer to $V_n$.
+
+\subsection{Gray Code}
+We think of a Gray code as a function on integers, $\{0, \ldots, 2^n - 1\} \to \{0, \ldots, 2^n - 1\}$.
+Here it is a map $\gc(\nu)$ from $V_n$ to $V_n$. Assume it has an entry and exit that are
+adjacent (which is always true according to Alber and Niedermeir), where we the
+entry is at the origin $\mathbf{0}$ and the exit is adjacent at the last index,
+$\mathbf{0}+\epsilon_{n-1}$.
 
 
 

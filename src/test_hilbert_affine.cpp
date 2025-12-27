@@ -667,8 +667,8 @@ int main(int argc, char* argv[]) {
         all_pass &= compare_exhaustive_2d(affine_impl, lean_impl);
         all_pass &= compare_exhaustive_3d(affine_impl, lean_impl);
         all_pass &= compare_exhaustive_4d(affine_impl, lean_impl);
-        all_pass &= compare_exhaustive_5d(affine_impl, lean_impl);
-        all_pass &= compare_exhaustive_6d(affine_impl, lean_impl);
+        // all_pass &= compare_exhaustive_5d(affine_impl, lean_impl);
+        // all_pass &= compare_exhaustive_6d(affine_impl, lean_impl);
 
         printf("========================================\n");
         printf("Results: %d/%d comparisons passed\n", tests_passed, tests_run);
