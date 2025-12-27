@@ -100,7 +100,7 @@ edges on the $n$-dimensional hypercube, and we can do that with a rotation and
 translation only, as described here.
 
 \begin{theorem}
-Let $n \ge 1$. The set of affine transforms $\{S_{e,\delta} : e \in \mathbb{F}_2^n,\, \delta \in \mathbb{Z}_n\}$
+Let $n \ge 1$. The set of affine transforms $\{S_{e,d} : e \in \mathbb{F}_2^n,\, d \in \mathbb{Z}_n\}$
 is in bijection with the set of directed edges of the $n$-dimensional hypercube.
 \end{theorem}
 
@@ -115,61 +115,61 @@ A \emph{directed edge} is an ordered pair $(u, u + \mathbf{e}_a)$ where $u \in V
 \medskip
 \noindent\textbf{Counting.}
 There are $2^n$ choices for $u$ and $n$ choices for $a$, giving $n \cdot 2^n$ directed edges.
-There are $2^n$ choices for $e$ and $n$ choices for $\delta$, giving $n \cdot 2^n$ transforms.
+There are $2^n$ choices for $e$ and $n$ choices for $d$, giving $n \cdot 2^n$ transforms.
 
 \medskip
 \noindent\textbf{The transform.}
 Let $\rho \in \mathrm{Sym}(\mathbb{Z}_n)$ be the cyclic permutation $\rho(a) = (a+1) \bmod n$,
 acting on $V$ by $(\rho \cdot v)(a) = v(\rho^{-1}(a))$.
-Then $\rho \cdot \mathbf{e}_j = \mathbf{e}_{(j+1) \bmod n}$, and hence
-$\rho^{-\delta} \cdot \mathbf{e}_j = \mathbf{e}_{(j-\delta) \bmod n}$.
+Then $\rho \cdot \mathbf{e}_j = \mathbf{e}_{(j+1) \bmod n}$.
 
-Define $S_{e,\delta} : V \to V$ by
-\[
-S_{e,\delta}(x) = \rho^{-\delta} \cdot x + e.
-\]
+Define $S_{e,d} : V \to V$ by
+$$
+S_{e,d}(x) = \rho^{d} \cdot x + e.
+$$
+The inverse is $S_{e,d}^{-1}(y) = \rho^{-d} \cdot (y + e)$.
 
 \medskip
 \noindent\textbf{Reference edge.}
-Fix the directed edge $R = (0, \mathbf{e}_{n-1})$ as the reference.
-Under $S_{e,\delta}$:
+Fix the directed edge $R = (\mathbf{0}, \mathbf{e}_{0})$ as the reference.
+Under $S_{e,d}$:
 \begin{align*}
-S_{e,\delta}(0) &= e, \\
-S_{e,\delta}(\mathbf{e}_{n-1}) &= \mathbf{e}_{(n-1-\delta) \bmod n} + e.
+S_{e,d}(\mathbf{0}) &= e, \\
+S_{e,d}(\mathbf{e}_{0}) &= \mathbf{e}_{d} + e.
 \end{align*}
-Thus $S_{e,\delta}$ maps $R$ to the directed edge from $e$ along axis $(n-1-\delta) \bmod n$.
+Thus $S_{e,d}$ maps $R$ to the directed edge from $e$ along axis $d$.
 
 \medskip
 \noindent\textbf{Surjectivity.}
 Given any directed edge $(u, u + \mathbf{e}_a)$, choose
-\[
-e = u, \qquad \delta = (n - 1 - a) \bmod n.
-\]
-Then $S_{e,\delta}(R) = (u, u + \mathbf{e}_a)$.
+$$
+e = u, \qquad d = a.
+$$
+Then $S_{e,d}(R) = (u, u + \mathbf{e}_a)$.
 
 For the reverse orientation $(u + \mathbf{e}_a, u)$, choose
-\[
-e = u + \mathbf{e}_a, \qquad \delta = (n - 1 - a) \bmod n.
-\]
+$$
+e = u + \mathbf{e}_a, \qquad d = a.
+$$
 Then:
 \begin{align*}
-S_{e,\delta}(0) &= u + \mathbf{e}_a, \\
-S_{e,\delta}(\mathbf{e}_{n-1}) &= (u + \mathbf{e}_a) + \mathbf{e}_a = u.
+S_{e,d}(\mathbf{0}) &= u + \mathbf{e}_a, \\
+S_{e,d}(\mathbf{e}_{0}) &= (u + \mathbf{e}_a) + \mathbf{e}_a = u.
 \end{align*}
 
 \medskip
 \noindent\textbf{Injectivity.}
-The map $S_{e,\delta} \mapsto S_{e,\delta}(R)$ sends distinct pairs $(e, \delta)$ to distinct
-directed edges, since $e$ determines the starting vertex and $\delta$ determines the axis.
+The map $S_{e,d} \mapsto S_{e,d}(R)$ sends distinct pairs $(e, d)$ to distinct
+directed edges, since $e$ determines the starting vertex and $d$ determines the axis.
 
 \medskip
 \noindent\textbf{Conclusion.}
-The map $S_{e,\delta} \mapsto S_{e,\delta}(R)$ is a bijection between
-$\{S_{e,\delta}\}$ and directed edges of the $n$-cube.
+The map $S_{e,d} \mapsto S_{e,d}(R)$ is a bijection between
+$\{S_{e,d}\}$ and directed edges of the $n$-cube.
 \end{proof}
 
 \begin{lemma}[Interpretation for Hilbert curves]
-The state $(e, \delta)$ of a Hilbert curve encodes exactly the information needed to specify
+The state $(e, d)$ of a Hilbert curve encodes exactly the information needed to specify
 an entry vertex and an exit direction. The bijection above shows this encoding is tight:
 no redundancy, no missing configurations.
 \end{lemma}
@@ -182,29 +182,32 @@ $k$ dimensions. We can choose a regular form of this Hilbert curve by choosing
 a single Gray code for $k$ dimensions. Any point in the Hilbert curve
 resides within $m$ nested Gray codes of dimension $k$.
 
-A parent hypercube has $k$ diemensions and is dyadic, so it's of extent 2 in
+A parent hypercube has $k$ dimensions and is dyadic, so it's of extent 2 in
 every dimension. At each lattice point is a child hypercube. The child hypercube, $w$,
 will have its own Gray code with an entry point $\alpha_w$ and exit at $\omega_w$.
 Internal to the Gray code for the child, we have defined above that the entry is
 the origin and the exit is in the $\epsilon_0$ direction from the origin.
 
 If we transform the child coordinates into the parent's space with a transform
-that depends on the particular child $w$ (call it $S_w$), then the adjacency criterion is
-that $S_w\omega_{w} + S_{w+1}\alpha_{w+1} = \epsilon_g$. Here $S_w$ is a transform
-acting on the point in $V_n$ and $\epsilon_g$ is along the direction of the Hilbert
-curve, so $\gc(w) + \gc(w+1) = \epsilon_g$.
+that depends on the particular child $i$ (call it $S_i$), then the adjacency criterion is
+that $\omega_{i} +\alpha_{i+1} = \epsilon_g$. $\epsilon_g$ is along the direction of the Hilbert
+curve, so $\gc(i) + \gc(i+1) = \epsilon_g$.
 
-Work through that.
 $$
 \begin{aligned}
-S^k_w(\omega_w) + S^k_{w+1}\alpha_{w+1} &= \epsilon^k_g \\
-S^k_w(\alpha_w + \epsilon_0) + S^k_{w+1}\alpha_{w+1} &= \epsilon^k_g \\
-\rho^{d_w}\alpha_w + e_w + \rho^{d_w}\epsilon_0 + e_w +  \rho^{d_{w+1}}\alpha_{w+1} + e_{w+1} &= \epsilon^k_g \\
-\rho^{d_w}\epsilon_0 + e_{w+1} &= \epsilon^k_g \\
-\epsilon_{d_w} + e_{w+1} &= \epsilon^k_g
+    \alpha_i & = S_i(\mathbf{0})=e_i \\
+    \omega_i & = S_i(\mathbf{0} + \epsilon_0)= \rho^{d_i}\mathbf{0} + \rho^{d_i}\epsilon_0 + e_{i}=\epsilon_{d_i}+ e_{i} \\
+    \alpha_{i+1} & = e_{i+1}
 \end{aligned}
 $$
 
+Work through that. All values are in dimension $k$.
+$$
+\begin{aligned}
+    \omega_i + \alpha_{i+1} & = \epsilon_g \\
+    \epsilon_{d_i}+ e_{i}+e_{i+1} & = \epsilon_g
+\end{aligned}
+$$
 
 \subsection{Embedding Transform}
 
@@ -245,6 +248,28 @@ axes shift to positions $\Delta, \Delta+1, \ldots, k+\Delta-1$. Since the new
 axes have entry bit 0 (from the left-shift) and the rotation increases by $\Delta$,
 the transform acts as identity on the new low-order bits while preserving the original
 transform's action on the high-order bits.
+
+    
+If it is true that $\epsilon_{d_i}+ e_{i}+e_{i+1} = \epsilon_g$ then when we
+modify them as above,
+$$
+\begin{aligned}
+    \alpha_i & = S'_i(\mathbf{0})=\rho^{\Delta}e_i \\
+    \omega_i & = S'_i(\mathbf{0} + \epsilon_0)=
+        \rho^{d_i + \Delta}\mathbf{0} + \rho^{d_i + \Delta}\epsilon_0 + \rho^{\Delta}e_{i}
+        =\epsilon_{d_i+ \Delta}+ \rho^{\Delta} e_{i} \\
+    \alpha_{i+1} & = \rho^{\Delta}e_{i+1}
+\end{aligned}
+$$
+In the $k+\Delta$ dimensions this becomes:
+$$
+\begin{aligned}
+    \omega_i + \alpha_{i+1} & = \epsilon'_g \\
+    \epsilon_{d_i+ \Delta}+ \rho^{\Delta} e_{i}+\rho^{\Delta}e_{i+1} & = \epsilon'_g
+\end{aligned}
+$$
+What happens to $\epsilon_g$ in the new dimensions? We need it to be true
+that the embedded Gray code is $\rho^{\Delta}\epsilon_g$ compared to the $k$-dimensional one.
 
 
 \end{document}
