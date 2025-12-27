@@ -84,6 +84,19 @@ static inline uint32_t gray_decode(uint32_t g) {
   return x;
 }
 
+/*
+ * Gray code with exit at axis 0 (fixed orientation).
+ * Standard BRGC exits at axis k-1; rotating by 1 moves exit to axis 0.
+ * This matches the BRGC usage by Butz and Hamilton.
+ */
+static inline uint32_t gray_code_axis0(uint32_t w, uint32_t k) {
+  return rotl_bits(gray_code(w), 1u, k);
+}
+
+static inline uint32_t gray_decode_axis0(uint32_t g, uint32_t k) {
+  return gray_decode(rotr_bits(g, 1u, k));
+}
+
 static inline uint32_t trailing_ones(uint32_t x) {
   uint32_t c = 0;
   while ((x & 1u) != 0u) {
@@ -106,14 +119,14 @@ static inline uint32_t child_dir(uint32_t w, uint32_t k) {
   return trailing_ones(w - 1u) % k;
 }
 
-/* S_{e,delta}(x) = rotL(delta) x XOR e, with delta = d+1. */
+/* S_{e,d}(x) = rotL(d) x XOR e. */
 static inline uint32_t affine_apply(uint32_t x, uint32_t e, uint32_t d, uint32_t k) {
-  return (rotl_bits(x, d + 1u, k) ^ e) & mask_bits(k);
+  return (rotl_bits(x, d, k) ^ e) & mask_bits(k);
 }
 
-/* S^{-1}(y) = rotR(delta) (y XOR e), with delta = d+1. */
+/* S^{-1}(y) = rotR(d) (y XOR e). */
 static inline uint32_t affine_apply_inv(uint32_t y, uint32_t e, uint32_t d, uint32_t k) {
-  return rotr_bits((y ^ e), d + 1u, k) & mask_bits(k);
+  return rotr_bits((y ^ e), d, k) & mask_bits(k);
 }
 
 typedef struct {
@@ -174,24 +187,6 @@ static bool build_active_axes(const int *m, int n, hilbert_curve_t *curve) {
 }
 
 
-static void embed_state(hilbert_curve_t *curve, int s,
-                        uint32_t e_old, uint32_t d_old,
-                        uint32_t *e_new, uint32_t *d_new) {
-  int k_shift = curve->k_level[s - 1] - curve->k_level[s];
-  *e_new = e_old << k_shift;
-  *d_new = d_old + (uint32_t)k_shift;
-}
-
-int hilbert_affine_index_bits(const int *m, int n) {
-  if (!m || n <= 0 || n > MAX_DIMS) return 0;
-  int total = 0;
-  for (int i = 0; i < n; i++) {
-    if (m[i] < 0) return 0;
-    total += m[i];
-  }
-  return total;
-}
-
 hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n) {
   hilbert_curve_t curve = {0};
 
@@ -223,7 +218,7 @@ hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n) {
     plane &= mask;
 
     uint32_t pre = affine_apply_inv(plane, st.e, st.d, (uint32_t)k);
-    uint32_t w = gray_decode(pre) & mask;
+    uint32_t w = gray_decode_axis0(pre, (uint32_t)k) & mask;
 
     h = (h << k) | (hindex_t)w;
 
@@ -232,11 +227,10 @@ hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n) {
     st.d = (st.d + child_dir(w, (uint32_t)k) + 1u) % (uint32_t)k;
 
     if (s > 1 && curve.k_level[s - 1] > k) {
-      uint32_t e_new = 0u;
-      uint32_t d_new = 0u;
-      embed_state(&curve, s, st.e, st.d, &e_new, &d_new);
-      st.e = e_new;
-      st.d = d_new;
+      /* embed state */
+      int k_shift = curve.k_level[s - 1] - k;
+      st.e <<= k_shift;
+      st.d += (uint32_t)k_shift;
     }
   }
 
@@ -270,7 +264,7 @@ void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point) {
     bit_pos -= k;
     uint32_t w = (uint32_t)((h >> bit_pos) & (hindex_t)mask);
 
-    uint32_t g = gray_code(w) & mask;
+    uint32_t g = gray_code_axis0(w, (uint32_t)k);
     uint32_t plane = affine_apply(g, st.e, st.d, (uint32_t)k);
 
     for (int j = 0; j < k; j++) {
@@ -283,11 +277,9 @@ void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point) {
     st.d = (st.d + child_dir(w, (uint32_t)k) + 1u) % (uint32_t)k;
 
     if (s > 1 && curve.k_level[s - 1] > k) {
-      uint32_t e_new = 0u;
-      uint32_t d_new = 0u;
-      embed_state(&curve, s, st.e, st.d, &e_new, &d_new);
-      st.e = e_new;
-      st.d = d_new;
+      int k_shift = curve.k_level[s - 1] - k;
+      st.e <<= k_shift;
+      st.d += (uint32_t)k_shift;
     }
   }
 }
