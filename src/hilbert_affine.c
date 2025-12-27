@@ -201,16 +201,16 @@ hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n) {
 
   for (int s = curve.mmax; s >= 1; s--) {
     int k = curve.k_level[s];
-    if (k == 0) return (hindex_t)0;
-
-    int first_axis = n - k;
-    const int *A = curve.axes_ordered + first_axis;
+    assert(k != 0);
 
     const uint32_t mask = mask_bits((uint32_t)k);
     st.e &= mask;
     st.d %= (uint32_t)k;
 
     uint32_t plane = 0u;
+
+    int first_axis = n - k;
+    const int *A = curve.axes_ordered + first_axis;
     for (int j = 0; j < k; j++) {
       int ax = A[j];
       plane |= ((point[ax] >> (s - 1)) & 1u) << j;
@@ -253,9 +253,7 @@ void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point) {
 
   for (int s = curve.mmax; s >= 1; s--) {
     int k = curve.k_level[s];
-    if (k == 0) return;
-    int first_axis = n - k;
-    const int *A = curve.axes_ordered + first_axis;
+    assert(k != 0);
 
     const uint32_t mask = mask_bits((uint32_t)k);
     st.e &= mask;
@@ -267,6 +265,8 @@ void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point) {
     uint32_t g = gray_code_axis0(w, (uint32_t)k);
     uint32_t plane = affine_apply(g, st.e, st.d, (uint32_t)k);
 
+    int first_axis = n - k;
+    const int *A = curve.axes_ordered + first_axis;
     for (int j = 0; j < k; j++) {
       int ax = A[j];
       point[ax] |= ((plane >> j) & 1u) << (s - 1);
