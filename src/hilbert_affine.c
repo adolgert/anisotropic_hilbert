@@ -223,7 +223,7 @@ hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n) {
     h = (h << k) | (hindex_t)w;
 
     uint32_t entry = child_entry(w) & mask;
-    st.e = (st.e ^ rotl_bits(entry, st.d + 1u, (uint32_t)k)) & mask;
+    st.e = affine_apply(entry, st.e, st.d + 1u, (uint32_t)k);
     st.d = (st.d + child_dir(w, (uint32_t)k) + 1u) % (uint32_t)k;
 
     if (s > 1 && curve.k_level[s - 1] > k) {
@@ -273,7 +273,7 @@ void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point) {
     }
 
     uint32_t entry = child_entry(w) & mask;
-    st.e = (st.e ^ rotl_bits(entry, st.d + 1u, (uint32_t)k)) & mask;
+    st.e = affine_apply(entry, st.e, st.d + 1u, (uint32_t)k);
     st.d = (st.d + child_dir(w, (uint32_t)k) + 1u) % (uint32_t)k;
 
     if (s > 1 && curve.k_level[s - 1] > k) {
