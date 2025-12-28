@@ -336,6 +336,98 @@ ways to reach one exit from the other.
 \end{enumerate}
 How many paths are there? A lot. I don't know how many.
 
+\begin{algorithm}
+\caption{Derive child-entry corners and exit directions for a 2-level $4^n$ curve}
+\begin{algorithmic}[1]
+\Require Dimension $n$; parent Gray order $g[0..2^n!-!1]\subset GF(2)^n$ with $g[0]=0$
+\Ensure Tables $\mathrm{entry}[w]\in \mathrm{GF}(2)^n$, $\mathrm{dir}[w]\in\{0,\dots,n-1\}$
+
+\State Define $V := \{0,1,2,3\}^n$
+\State For each $x\in V$, write $x = 2h(x)+\ell(x)$ with $h(x),\ell(x)\in\mathrm{GF}(2)^n$
+\State Compute $\mathrm{rank}:\mathrm{GF}(2)^n\to\{0,\dots,2^n-1\}$ s.t.\ $\mathrm{rank}(g[w])=w$
+\State Define layer index $w(x) := \mathrm{rank}(h(x))$
+\State $s \gets (0,\dots,0)$ \Comment{start vertex in $V$}
+\State $f \gets (3g[2^n\!-\!1]_0,\dots,3g[2^n\!-\!1]_{n-1})$ \Comment{finish corner in $V$}
+
+\State Define $\mathrm{Exit}(x)$ to be true iff $x=f$ or $\exists y\sim x$ with $w(y)=w(x)+1$
+\State Initialize directed graph $G$ on vertex set $V$
+
+\ForAll{$x\in V$ with $\mathrm{Exit}(x)$ and $w(x)<2^n-1$}
+  \ForAll{$y\sim x$ with $w(y)=w(x)+1$} \Comment{cross into next cube}
+    \ForAll{$z\sim y$ with $w(z)=w(y)$ and $\mathrm{Exit}(z)$} \Comment{one internal hop to an exit}
+      \State Add directed edge $x\to z$ to $G$
+    \EndFor
+  \EndFor
+\EndFor
+
+\State Add edges $s\to z$ for all $z\sim s$ with $w(z)=0$ and $\mathrm{Exit}(z)$
+\State Find a directed path $P=(s,X_0,X_1,\dots,X_{2^n-1})$ in $G$ with $X_{2^n-1}=f$
+\If{no such $P$ exists} \State \textbf{fail} \EndIf
+
+\State Set $\mathrm{entry}[0]\gets \ell(s)$
+\For{$w=0$ \textbf{to} $2^n-1$}
+  \If{$w>0$}
+    \State $d \gets \text{index of the $1$ in } g[w-1]\oplus g[w]$
+    \State $E_w \gets \text{the unique neighbor of }X_{w-1}\text{ in cube }w \text{ across axis }d$
+    \State $\mathrm{entry}[w]\gets \ell(E_w)$
+  \EndIf
+  \State $\ell_{\mathrm{out}}\gets \ell(X_w)$
+  \State $t \gets \mathrm{entry}[w]\oplus \ell_{\mathrm{out}}$
+  \State $\mathrm{dir}[w]\gets \text{index of the $1$ in }t$ \Comment{require $\mathrm{wt}(t)=1$}
+\EndFor
+
+\Return $(\mathrm{entry},\mathrm{dir})$
+\end{algorithmic}
+\end{algorithm}
+
+And the improvement:
+% Requires:
+% \usepackage{algorithm}
+% \usepackage{algorithmic}
+
+\begin{algorithm}
+\caption{Two-level $4^n$ child-entry/exit tables via mismatch-state DP in $\mathrm{GF}(2)^n$}
+\label{alg:gf2-dp}
+\begin{algorithmic}[1]
+\Require Dimension $n\ge 2$; parent Gray sequence $g_0,\dots,g_{2^n-1}\in\mathrm{GF}(2)^n$ with $g_0=0$
+\Ensure Child entry corners $\ell^{\mathrm{in}}_w\in\mathrm{GF}(2)^n$ and exit directions $\mathrm{dir}_w\in\{0,\dots,n-1\}$ for $w=0,\dots,2^n-1$
+
+\State $N\gets 2^n$, \quad $m\gets N-1$
+\For{$w\gets 0$ \textbf{to} $m-1$}
+  \State Let $d_w$ be the unique index such that $g_{w+1}=g_w\oplus e_{d_w}$
+\EndFor
+
+\State Define mismatch state $s_w := g_w \oplus \ell^{\mathrm{in}}_w \in \mathrm{GF}(2)^n$
+\State Initialize reachable set $R_0\gets\{0\}$ and predecessor map $\pi(\cdot)\gets\bot$
+
+\For{$w\gets 0$ \textbf{to} $m-1$}
+  \State $R_{w+1}\gets\emptyset$
+  \ForAll{$s\in R_w$}
+    \For{$a\gets 0$ \textbf{to} $n-1$}
+      \State $s' \gets s\oplus e_a$ \Comment{$s_{w+1}=s_w\oplus e_{\mathrm{dir}_w}$}
+      \If{$(s')_{d_w}=1$} \Comment{face constraint for crossing cube $w\to w+1$}
+        \If{$s'\notin R_{w+1}$}
+          \State $R_{w+1}\gets R_{w+1}\cup\{s'\}$
+          \State $\pi(w+1,s')\gets (s,a)$
+        \EndIf
+      \EndIf
+    \EndFor
+  \EndFor
+\EndFor
+
+\State Choose any $s_{m}\in R_m$ with Hamming weight $1$
+\State Backtrack with $\pi$ to recover $s_0,\dots,s_m$ and $a_0,\dots,a_{m-1}$
+\For{$w\gets 0$ \textbf{to} $m$}
+  \State $\ell^{\mathrm{in}}_w \gets g_w \oplus s_w$
+  \State $\mathrm{dir}_w \gets a_w$ \Comment{for $w<m$}
+\EndFor
+\State $\mathrm{dir}_m \gets \text{index of the 1-bit of } s_m$ \Comment{last cube ends at local corner $g_m$}
+
+\Return $\{\ell^{\mathrm{in}}_w,\mathrm{dir}_w\}_{w=0}^{m}$
+\end{algorithmic}
+\end{algorithm}
+
+
 \subsection{Algorithm to Find Points and Indices}
 
 Algorithm for point-to-index (not a surprise).
