@@ -15,6 +15,8 @@
  *
  * Coordinate type is uint32_t, so each m_j must be in [0, 32].
  * Hilbert indices use __uint128_t; sum(m_j) must be <= 128.
+ *
+ * Test with `make test_hilbert_general && ./test_hilbert_general`.
  */
 
 #include <stdbool.h>
