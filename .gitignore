@@ -27,3 +27,11 @@ codex/
 # References to ignore
 papers/
 journals/
+
+# Binaries
+src/generate_hilbert_tables
+src/test_hilbert_affine
+src/test_hilbert_affine_lean
+src/test_hilbert_general
+
+# Papers and PDFs

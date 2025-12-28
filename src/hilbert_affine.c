@@ -100,7 +100,10 @@ static inline uint32_t gray_decode(uint32_t g)
 /*
  * Gray code with exit at axis 0 (fixed orientation).
  * Standard BRGC exits at axis k-1; rotating by 1 moves exit to axis 0.
- * This matches the BRGC usage by Butz and Hamilton.
+ * Hamilton's paper had a conceptual difficulty where it conflated the
+ * direction of the child hypercube orientation with the rotation, but
+ * the BRGC orientation was in the last axis. This brings the two into
+ * agreement.
  */
 static inline uint32_t gray_code_axis0(uint32_t w, uint32_t k)
 {
