@@ -244,6 +244,7 @@ The per-level relation is:
 w = G^{-1}(S_{e,\delta}^{-1}(\ell)).
 \]
 
+G(w) gives a vertex label in the reference orientation (entry=0, exit direction=n−1). \(S_{e,δ}\) is the orientation map that transforms reference labels into the current subcube's physical vertex labels.
 This is a bijection because \(G\) and \(S_{e,\delta}\) are bijections.
 
 ---

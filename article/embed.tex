@@ -1,0 +1,332 @@
+\documentclass[11pt]{article}
+
+% ============================================================================
+% PACKAGES
+% ============================================================================
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}      % For \coloneqq and other extensions
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}       % For nice tables
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}       % For customized lists
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
+
+% ============================================================================
+% THEOREM ENVIRONMENTS
+% ============================================================================
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% ============================================================================
+% CUSTOM COMMANDS FOR NOTATION
+% ============================================================================
+% Bit operations (matching Hamilton's notation)
+\newcommand{\XOR}{\mathbin{\veebar}}           % XOR: exclusive or
+\newcommand{\AND}{\mathbin{\wedge}}            % AND
+\newcommand{\OR}{\mathbin{\vee}}               % OR
+\newcommand{\NOT}{\mathord{\sim}}              % NOT (bitwise complement)
+\newcommand{\SHL}{\mathbin{\triangleleft}}     % Shift left
+\newcommand{\SHR}{\mathbin{\triangleright}}    % Shift right
+\newcommand{\ROTL}{\mathbin{\circlearrowleft}} % Rotate left
+\newcommand{\ROTR}{\mathbin{\circlearrowright}}% Rotate right
+\newcommand{\vplus}{\mathbin{\oplus}}   % plus
+\newcommand{\vtimes}{\mathbin{\vtimes}}
+
+% Convenient shortcuts
+\newcommand{\gc}{\mathrm{G}}                  % Gray code function
+\newcommand{\gcinv}{\mathrm{gc}^{-1}}          % Gray code inverse
+\newcommand{\bitfn}{\mathrm{bit}}              % bit extraction function
+\newcommand{\tsb}{\mathrm{tsb}}                % trailing set bits
+\newcommand{\entry}{\mathrm{e}}                % entry point function
+\newcommand{\exitpt}{\mathrm{f}}               % exit point function (f for "finish")
+\newcommand{\dir}{\mathrm{d}}                  % direction function
+\newcommand{\gcr}{\mathrm{gcr}}                % Gray code rank
+\newcommand{\dk}{dk}
+\newcommand{\embed}{\kappa}
+
+% Sets
+\newcommand{\Z}{\mathbb{Z}}                    % Integers
+\newcommand{\N}{\mathbb{N}}                    % Natural numbers
+\newcommand{\B}{\mathbb{B}}                    % Binary digits {0,1}
+
+% Other
+\newcommand{\encode}{\mathrm{encode}}
+\newcommand{\decode}{\mathrm{decode}}
+
+
+\title{Hilbert Curves for Unequal Dimensions}
+\author{Andrew Dolgert}
+\date{\today}
+\begin{document}
+\maketitle
+\begin{abstract}
+Given a lattice-continuous Hilbert curve defined for $n$-dimensions on a hypercube with
+extent $2^k$, it is always possible to
+create a lattice-continuous Hilbert curve in $n$-dimensions with unequal extents that
+are powers of two.
+This article shows how to construct such a Hilbert curve.
+\end{abstract}
+
+\section{Introduction}
+
+\subsection{Notation}
+Use roman for integers. Use Greek letters for objects that live in $V_n=GF(2)^n$.
+The function $b(i)$ converts an integer to $V_n$.
+
+\subsection{Gray Code}
+Let $Q_k=\{0,1\}^k\cong \mathbb{F}_2^k$.
+
+A directed Gray code in dimension $k$ is a Hamiltonian path
+$$
+    \gc_k : \{0,\ldots,2^k-1\} \rightarrow Q_k
+$$
+such that consecutive vertices differ in exactly one coordinate.
+$$
+    \gc_k(i+1) = \gc_k(i)\XOR \epsilon_{\sigma_k(i)}\quad\text{for some}\quad \sigma_k(i)\in\{0,\ldots,k-1\}.
+$$
+Equivalently, we can define the step vector
+$$
+    g_k(i)=\gc_k(i)\XOR\gc_k(i+1)\in\{\epsilon_0,\ldots,\epsilon_{k-1}\}.
+$$
+
+
+We think of a Gray code as a function on integers, $\{0, \ldots, 2^n - 1\} \to \{0, \ldots, 2^n - 1\}$.
+Here it is a map $\gc(\nu)$ from $V_n$ to $V_n$. Assume it has an entry and exit that are
+adjacent (which is always true according to Alber and Niedermeir), where we the
+entry is at the origin $\mathbf{0}$ and the exit is adjacent at the last index,
+$\mathbf{0}+\epsilon_{n-1}$. This exit direction has proven mentally inconvenient
+to Butz and Hamilton, and so it is now. Rotate the Gray code with a circular rotation
+by 1 so that the exit is in the $\epsilon_0$ direction. We will call this our gray code.
+
+
+\subsection{Affine Transforms on Directed Edges of the Hypercube}
+The Hilbert curve requires transformations of the sub-hypercubes. A general transformation
+could permute all matrices. What we require is that the entry and exit be in the
+corner and direction we need, so we need to choose among all possible directed
+edges on the $n$-dimensional hypercube, and we can do that with a rotation and
+translation only, as described here.
+
+\begin{theorem}
+Let $n \ge 1$. The set of affine transforms $\{S_{e,d} : e \in \mathbb{F}_2^n,\, d \in \mathbb{Z}_n\}$
+is in bijection with the set of directed edges of the $n$-dimensional hypercube.
+\end{theorem}
+
+\begin{proof}
+Let $V = \mathbb{F}_2^n$ be the vector space over $\mathbb{F}_2$ with standard basis
+$\{\mathbf{e}_0, \ldots, \mathbf{e}_{n-1}\}$.
+The vertices of the $n$-cube are the elements of $V$, and two vertices are adjacent
+if and only if they differ by some $\mathbf{e}_a$.
+
+A \emph{directed edge} is an ordered pair $(u, u + \mathbf{e}_a)$ where $u \in V$ and $a \in \mathbb{Z}_n$.
+
+\medskip
+\noindent\textbf{Counting.}
+There are $2^n$ choices for $u$ and $n$ choices for $a$, giving $n \cdot 2^n$ directed edges.
+There are $2^n$ choices for $e$ and $n$ choices for $d$, giving $n \cdot 2^n$ transforms.
+
+\medskip
+\noindent\textbf{The transform.}
+Let $\rho \in \mathrm{Sym}(\mathbb{Z}_n)$ be the cyclic permutation $\rho(a) = (a+1) \bmod n$,
+acting on $V$ by $(\rho \cdot v)(a) = v(\rho^{-1}(a))$.
+Then $\rho \cdot \mathbf{e}_j = \mathbf{e}_{(j+1) \bmod n}$.
+
+Define $S_{e,d} : V \to V$ by
+$$
+S_{e,d}(x) = \rho^{d} \cdot x + e.
+$$
+The inverse is $S_{e,d}^{-1}(y) = \rho^{-d} \cdot (y + e)$.
+
+\medskip
+\noindent\textbf{Reference edge.}
+Fix the directed edge $R = (\mathbf{0}, \mathbf{e}_{0})$ as the reference.
+Under $S_{e,d}$:
+\begin{align*}
+S_{e,d}(\mathbf{0}) &= e, \\
+S_{e,d}(\mathbf{e}_{0}) &= \mathbf{e}_{d} + e.
+\end{align*}
+Thus $S_{e,d}$ maps $R$ to the directed edge from $e$ along axis $d$.
+
+\medskip
+\noindent\textbf{Surjectivity.}
+Given any directed edge $(u, u + \mathbf{e}_a)$, choose
+$$
+e = u, \qquad d = a.
+$$
+Then $S_{e,d}(R) = (u, u + \mathbf{e}_a)$.
+
+For the reverse orientation $(u + \mathbf{e}_a, u)$, choose
+$$
+e = u + \mathbf{e}_a, \qquad d = a.
+$$
+Then:
+\begin{align*}
+S_{e,d}(\mathbf{0}) &= u + \mathbf{e}_a, \\
+S_{e,d}(\mathbf{e}_{0}) &= (u + \mathbf{e}_a) + \mathbf{e}_a = u.
+\end{align*}
+
+\medskip
+\noindent\textbf{Injectivity.}
+The map $S_{e,d} \mapsto S_{e,d}(R)$ sends distinct pairs $(e, d)$ to distinct
+directed edges, since $e$ determines the starting vertex and $d$ determines the axis.
+
+\medskip
+\noindent\textbf{Conclusion.}
+The map $S_{e,d} \mapsto S_{e,d}(R)$ is a bijection between
+$\{S_{e,d}\}$ and directed edges of the $n$-cube.
+\end{proof}
+
+\begin{lemma}[Interpretation for Hilbert curves]
+The state $(e, d)$ of a Hilbert curve encodes exactly the information needed to specify
+an entry vertex and an exit direction. The bijection above shows this encoding is tight:
+no redundancy, no missing configurations.
+\end{lemma}
+
+
+\section{Isotropic Hilbert Curve}
+
+An isotropic Hilbert curve is defined on a lattice of extent $2^m$ in each of
+$k$ dimensions. We can choose a regular form of this Hilbert curve by choosing
+a single Gray code for $k$ dimensions. Any point in the Hilbert curve
+resides within $m$ nested Gray codes of dimension $k$.
+
+A parent hypercube has $k$ dimensions and is dyadic, so it's of extent 2 in
+every dimension. At each lattice point is a child hypercube. The child hypercube, $w$,
+will have its own Gray code with an entry point $\alpha_w$ and exit at $\omega_w$.
+Internal to the Gray code for the child, we have defined above that the entry is
+the origin and the exit is in the $\epsilon_0$ direction from the origin.
+
+If we transform the child coordinates into the parent's space with a transform
+that depends on the particular child $i$ (call it $S_i$), then the adjacency criterion is
+that $\omega_{i} +\alpha_{i+1} = \epsilon_g$. $\epsilon_g$ is along the direction of the Hilbert
+curve, so $\gc(i) + \gc(i+1) = \epsilon_g$.
+
+$$
+\begin{aligned}
+    \alpha_i & = S_i(\mathbf{0})=e_i \\
+    \omega_i & = S_i(\mathbf{0} + \epsilon_0)= \rho^{d_i}\epsilon_0 + e_{i}=\epsilon_{d_i}+ e_{i} \\
+    \alpha_{i+1} & = e_{i+1}
+\end{aligned}
+$$
+
+Work through that. All values are in dimension $k$.
+$$
+\begin{aligned}
+    \omega_i + \alpha_{i+1} & = g_k(i) \\
+    \epsilon_{d_i}+ e_{i}+e_{i+1} & = g_k(i)
+\end{aligned}
+$$
+
+A $k$-dimensional Hilbert curve is defined by a set of child transforms
+$\{S_i^{(k)}\}_{i=0}^{2^k-1}$ such that, after placing child $i$ with $S_i^{(k)}$,
+the exit of child $i$ meets the entry of child $i+1$ across the shared face.
+
+\subsection{Embedding Transform}
+
+We start with a Hilbert curve for which we know that
+$$
+S^k_w(\alpha_w + \epsilon_0) + S^k_{w+1}\alpha_{w+1} = \epsilon^k_g
+$$
+Here the $k$ subscript says that the curve is defined in $k$ dimensions.
+
+Given a transform specified by $e$ and $d$, we apply it during encoding with
+$$
+    w = \gc^{-1}(S^{-1(k)}_{e,d}(p))
+$$
+The transform $S^{-1(k)}_{e,d}(p)$ is an affine transform on a point $p$ in the $V_n$
+space. The forward transform is a rotation and then an additon.
+$$
+    S^{(k)}_{e,d}(w) = \rho^d w + e
+$$
+The reverse is the opposite.
+$$
+    S^{-1(k)}_{e,d}(p) = \rho^{-d}(p + e)
+$$
+In $k$ dimensions a rotation is defined on $V_n$ as a rotation of the indices,
+$a$, in the opposite direction.
+$$
+    \rho \nu(a) = \nu(\rho^{-1} a)
+$$
+
+Define a coordinate embedding transform.
+$$
+  \embed_{\dk}: Q_k\rightarrow Q_{k+\dk},\quad \embed_{\dk}(x_0,\ldots,x_{n-1})=(0,\ldots,0,x_0,\ldots,x_k-1)
+$$
+This identifies $Q_k$ with the face
+$$
+    F := \{y\in Q_{k+\dk}:y_0=\cdots=y_{\dk-1}=0\subseteq Q_{k+\dk} \}
+$$
+Because this embedding is linear over $\mathbb{F}_2$,
+$$
+    \embed_{\dk}\nu\vplus \embed_{\dk}\upsilon = \embed_{\dk}(\nu\vplus\upsilon),
+$$
+applying embedded transforms to the embedded adjacency gives a transformed
+constitutive equation.
+$$
+    \hat{S}_{i}^{(k+\dk)}\embed_{\dk}\epsilon_0 \vplus
+    \hat{S}_{i+1}^{(k+\dk)}\embed_{\dk}\mathbf{0} = \embed_{\dk}g_k(i)
+$$
+
+
+If I take an affine transform in $k$ dimensions put it into $k+\dk$ dimensions
+by modifying $e$ and $d$ by putting $e$ as the high bits of a $k+\dk$ dimensional
+vector and modify $d$ by increasing it by $\dk$. The embedded
+transform $S'_{e',d'}$ acts on a $(k+\dk)$-bit vector $x$ as:
+$$
+S'_{e',d'}(x) = \rho^{d + \dk}x \oplus (\rho^{\dk}e)
+$$
+The new axes occupy positions $0, 1, \ldots, \dk-1$, while the original $k$
+axes shift to positions $\dk, \dk+1, \ldots, k+\dk-1$. Since the new
+axes have entry bit 0 (from the left-shift) and the rotation increases by $\dk$,
+the transform acts as identity on the new low-order bits while preserving the original
+transform's action on the high-order bits.
+
+
+Remember that we assume $\epsilon_{d_i}+ e_{i}+e_{i+1} = g_k(i)$. When we
+modify them as above,
+$$
+\begin{aligned}
+    \alpha_i & = S'_i(\mathbf{0})=\rho^{\dk}e_i \\
+    \omega_i & = S'_i(\mathbf{0} + \epsilon_0)=
+        \rho^{d_i + \dk}\epsilon_0 + \rho^{\dk}e_{i}
+        =\epsilon_{d_i+ \dk}+ \rho^{\dk} e_{i} \\
+    \alpha_{i+1} & = \rho^{\dk}e_{i+1}
+\end{aligned}
+$$
+In the $k+\dk$ dimensions this becomes:
+$$
+\begin{aligned}
+    \omega_i + \alpha_{i+1} & = g_{(k)}(i) \\
+    \epsilon_{d_i+ \dk}+ \rho^{\dk} e_{i}+\rho^{\dk}e_{i+1} & = \rho^{\dk}g_{(k)}(i)
+\end{aligned}
+$$
+In other words, by embedding the transform that defines the child space,
+we are guaranteed adjacency in that larger child space as long as the Gray step
+from in the child space is an embedded version of the Gray step in the parent space.
+
+This equation needs to apply for those indices that are used for this level,
+and these are only the high $k$ active axes out of the $k+dk$ total axes. The $i$
+at this level is assigned by the parent, so it runs over $[0,2^k-1]$, but that's
+all that is needed during axis activation.
+
+The final agreement we need is that, in the child layer, we need to be able to
+define orientations for the children such that our boundary conditions are met
+for the layer above. That is that there is an entry at the origin and an exit
+at $\epsilon_0$.
+
+For each child hypercube of the level with $k+\dk$ active dimensions, we can
+use the next Gray code in the given class $\gc_{k+\dk}$.
+
+\end{document}
