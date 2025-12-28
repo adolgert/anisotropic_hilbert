@@ -106,10 +106,14 @@ static bool test_random_reproducibility(int k) {
         return false;
     }
 
-    auto gray3 = generate_random(k, 43);
-    if (gray1 == gray3) {
-        std::cout << "FAIL (different seeds gave same result)\n";
-        return false;
+    // For k=1, there's only one possible Gray code [0,1], so different seeds
+    // must give the same result. Skip that check for k=1.
+    if (k > 1) {
+        auto gray3 = generate_random(k, 43);
+        if (gray1 == gray3) {
+            std::cout << "FAIL (different seeds gave same result)\n";
+            return false;
+        }
     }
 
     std::cout << "PASS\n";
@@ -141,7 +145,7 @@ int main(int argc, char* argv[]) {
         {GrayCodeType::Random, "Random"},
     };
 
-    for (int k = 2; k <= 7; k++) {
+    for (int k = 1; k <= 7; k++) {
         std::cout << "Dimension k=" << k << " (n=" << (1 << k) << " vertices):\n";
 
         for (const auto& t : types) {

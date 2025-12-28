@@ -358,8 +358,8 @@ static std::vector<u32> try_monotone_iterative(int k) {
 }
 
 std::vector<u32> generate_monotone(int k) {
-    // For k=2, BRGC is already monotone
-    if (k == 2) return generate_brgc(k);
+    // For k=1 and k=2, BRGC is already monotone
+    if (k <= 2) return generate_brgc(k);
 
     // Try iterative search with monotone constraint
     auto path = try_monotone_iterative(k);
@@ -483,8 +483,8 @@ static std::vector<u32> try_balanced_iterative(int k, int tolerance) {
 }
 
 std::vector<u32> generate_balanced(int k) {
-    // BRGC is balanced for k=2 (counts: 2,2) and close for k=4
-    if (k == 2) return generate_brgc(k);
+    // BRGC is perfectly balanced for k=1 (counts: 2) and k=2 (counts: 2,2)
+    if (k <= 2) return generate_brgc(k);
 
     // Try with increasing tolerance
     for (int tolerance = 2; tolerance <= 6; tolerance += 2) {

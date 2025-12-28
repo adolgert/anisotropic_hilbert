@@ -4,7 +4,7 @@ A C++ library for generating different types of Gray codes on hypercubes.
 
 ## What It Is
 
-A **Gray code** is a Hamiltonian path on the n-dimensional hypercube $Q_k$, where consecutive vertices differ by exactly one bit. This library generates Gray codes of dimension $k$ (for $k = 2$ to $7$) with different properties:
+A **Gray code** is a Hamiltonian path on the n-dimensional hypercube $Q_k$, where consecutive vertices differ by exactly one bit. This library generates Gray codes of dimension $k$ (for $k = 1$ to $7$) with different properties:
 
 | Type | Description | Guarantee |
 |------|-------------|-----------|
@@ -17,6 +17,8 @@ All generated codes are:
 - **Cyclic**: First and last vertices are adjacent
 - **Start at 0**: The path begins at vertex 0
 - **Complete**: All $2^k$ vertices visited exactly once
+
+For $k = 1$, the Gray code is simply `[0, 1]` - the unique Hamiltonian cycle on a single edge. This trivial case is included for completeness, as it's needed when the anisotropic Hilbert curve reduces to a single active axis. Note that for $k = 1$, all types (BRGC, Monotone, Balanced, Random) return the same result since there's only one possible Gray code.
 
 ## How to Build
 
@@ -55,7 +57,7 @@ namespace graygen {
 ### Generation Functions
 
 ```cpp
-// Generate specific types (k = dimension, 2-7)
+// Generate specific types (k = dimension, 1-7)
 std::vector<u32> generate_brgc(int k);
 std::vector<u32> generate_monotone(int k);
 std::vector<u32> generate_balanced(int k);
