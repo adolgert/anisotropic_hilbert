@@ -22,7 +22,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "balanced_tables.h"
+#include "random_tables.h"
 
 #define MAX_DIMS 32
 #define MAX_LEVELS 32
