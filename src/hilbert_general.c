@@ -1,8 +1,9 @@
 /*
- * hilbert_affine.c
+ * hilbert_general.c
  *
  * Anisotropic (activation) Hilbert encode/decode using the affine-map
- * formulation from lean/refine_affine_aniso.md.
+ * formulation from lean/refine_affine_aniso.md. This can use multiple
+ * Gray codes and transformations underneath.
  *
  * - Axes are labeled 0..n-1.
  * - At level s (MSB-first), active axes are those with m_j >= s, ordered by
