@@ -26,7 +26,7 @@ TARGET = libanisotropic_hilbert$(LIBEXT)
 SRC = anisotropic_hilbert.c
 OBJ = $(SRC:.c=.o)
 
-.PHONY: all clean test refine_pi_test test_affine test_affine_verbose test_affine_lean test_compare test_gray
+.PHONY: all clean test refine_pi_test test_affine test_affine_verbose test_affine_lean test_compare test_gray test_general test_general_verbose
 
 all: $(TARGET)
 
@@ -47,7 +47,7 @@ quicktest: $(TARGET)
 	python3 -c "from anisotropic_hilbert_c import encode, decode; print('C library loaded'); p = decode(0, (2,2)); print(f'decode(0, (2,2)) = {p}')"
 
 clean:
-	rm -f $(TARGET) $(OBJ) hilbert_affine.o hilbert_ffi.o test_hilbert_affine test_hilbert_affine_lean refine_pi_test generate_gray.o generate_gray_test
+	rm -f $(TARGET) $(OBJ) hilbert_affine.o hilbert_ffi.o test_hilbert_affine test_hilbert_affine_lean test_hilbert_general refine_pi_test generate_gray.o generate_gray_test
 
 # Build and run the refine_pi self-test harness.
 refine_pi_test: refine_pi.c
@@ -66,6 +66,17 @@ test_affine: test_hilbert_affine
 
 test_affine_verbose: test_hilbert_affine
 	./test_hilbert_affine -v
+
+# Build and run the hilbert_general test harness.
+# This tests the table-based implementation.
+test_hilbert_general: test_hilbert_general.c hilbert_general.c brgc_tables.h
+	$(CC) $(CFLAGS) -o $@ test_hilbert_general.c
+
+test_general: test_hilbert_general
+	./test_hilbert_general
+
+test_general_verbose: test_hilbert_general
+	./test_hilbert_general -v
 
 # Build and run the Gray code generator tests
 generate_gray.o: generate_gray.cpp generate_gray.h

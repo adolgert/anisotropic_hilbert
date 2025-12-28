@@ -27,3 +27,27 @@ codex/
 # References to ignore
 papers/
 journals/
+
+# Binaries
+src/generate_hilbert_tables
+src/test_hilbert_affine
+src/test_hilbert_affine_lean
+src/test_hilbert_general
+
+# Papers and PDFs
+.devcontainer/
+Hamilton - Technical Report CS-2006-07.pdf
+Hamilton report 2006.md
+article/discrete_proof.pdf
+article/discrete_proof_elaborated.pdf
+article/embed.pdf
+article/hilbert_3_7.png
+article/hilbert_comparison_2x1.pdf
+article/hilbert_comparison_2x1.png
+article/hilbert_comparison_3x1.pdf
+article/hilbert_comparison_3x1.png
+comments/20251218f_explain/explainer.pdf
+comments/20251219b_refine_pi/refine_pi.pdf
+comments/20251219d_discrete_proof_elaborated/discrete_proof_elaborated.pdf
+comments/20251222a_gray_based.pdf
+comments/20251222a_gray_based_fixed.pdf

@@ -1,25 +1,30 @@
 /*
- * hilbert_affine.c
+ * hilbert_general.c
  *
  * Anisotropic (activation) Hilbert encode/decode using the affine-map
- * formulation from lean/refine_affine_aniso.md.
+ * formulation from lean/refine_affine_aniso.md. This can use multiple
+ * Gray codes and transformations underneath.
  *
  * - Axes are labeled 0..n-1.
  * - At level s (MSB-first), active axes are those with m_j >= s, ordered by
  *   priority (m_j, j).
- * - The per-level state is the affine map S_{e,delta}(x) = rotL(delta) x XOR e
- *   on the active list (delta = d+1).
+ * - The per-level state is the affine map S_{e,d}(x) = rotL(d) x XOR e
+ *   on the active list.
  * - Digits are variable-width (k_s bits) and are packed MSB-first into the
  *   Hilbert index.
  *
  * Coordinate type is uint32_t, so each m_j must be in [0, 32].
  * Hilbert indices use __uint128_t; sum(m_j) must be <= 128.
+ *
+ * Test with `make test_hilbert_general && ./test_hilbert_general`.
  */
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
+
+#include "random_tables.h"
 
 #define MAX_DIMS 32
 #define MAX_LEVELS 32
@@ -81,67 +86,32 @@ static inline uint32_t rotr_bits(uint32_t x, uint32_t r, uint32_t bits)
   return (uint32_t)(((x >> r) | (x << (bits - r))) & mask);
 }
 
-static inline uint32_t gray_code(uint32_t x)
-{
-  return x ^ (x >> 1);
-}
-
-static inline uint32_t gray_decode(uint32_t g)
-{
-  uint32_t x = g;
-  x ^= x >> 1;
-  x ^= x >> 2;
-  x ^= x >> 4;
-  x ^= x >> 8;
-  x ^= x >> 16;
-  return x;
-}
-
-/*
- * Gray code with exit at axis 0 (fixed orientation).
- * Standard BRGC exits at axis k-1; rotating by 1 moves exit to axis 0.
- * Hamilton's paper had a conceptual difficulty where it conflated the
- * direction of the child hypercube orientation with the rotation, but
- * the BRGC orientation was in the last axis. This brings the two into
- * agreement.
- */
+/* Gray code with exit at axis 0 - table lookup version. */
 static inline uint32_t gray_code_axis0(uint32_t w, uint32_t k)
 {
-  return rotl_bits(gray_code(w), 1u, k);
+  assert(k >= 1 && k <= 7);
+  return (uint32_t)hilbert_gray(k, w);
 }
 
+/* Inverse of gray_code_axis0 - table lookup version. */
 static inline uint32_t gray_decode_axis0(uint32_t g, uint32_t k)
 {
-  return gray_decode(rotr_bits(g, 1u, k));
+  assert(k >= 1 && k <= 7);
+  return (uint32_t)hilbert_gray_rank(k, g);
 }
 
-static inline uint32_t trailing_ones(uint32_t x)
-{
-  uint32_t c = 0;
-  while ((x & 1u) != 0u)
-  {
-    c++;
-    x >>= 1;
-  }
-  return c;
-}
-
-/* Hamilton entry sequence e(w) for a k-dimensional cube. */
+/* Child entry sequence - table lookup version. */
 static inline uint32_t child_entry(uint32_t w, uint32_t k)
 {
-  if (w == 0u)
-    return 0u;
-  return rotl_bits(gray_code((w - 1u) & ~1u), 1, k);
+  assert(k >= 1 && k <= 7);
+  return (uint32_t)hilbert_child_entry(k, w);
 }
 
-/* Hamilton direction sequence d(w) for a k-dimensional cube. */
+/* Child direction sequence - table lookup version. */
 static inline uint32_t child_dir(uint32_t w, uint32_t k)
 {
-  if (w == 0u)
-    return 1u;
-  if ((w & 1u) != 0u)
-    return (trailing_ones(w) + 1) % k;
-  return (trailing_ones(w - 1u) + 1) % k;
+  assert(k >= 1 && k <= 7);
+  return (uint32_t)hilbert_child_dir(k, w);
 }
 
 /* S_{e,d}(x) = rotL(d) x XOR e. */
