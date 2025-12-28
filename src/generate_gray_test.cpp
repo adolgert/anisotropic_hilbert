@@ -50,6 +50,9 @@ static bool test_gray_code(int k, GrayCodeType type, const char* type_name, u64 
     bool valid = verify_gray_code(gray, k);
     bool cyclic = verify_cyclic(gray, k);
     bool starts_at_zero = !gray.empty() && gray[0] == 0;
+    // Check axis-0 normalization: exit edge should be along axis 0
+    // gray[0] XOR gray[n-1] should equal 1 (bit 0 only)
+    bool exit_axis_0 = !gray.empty() && (gray.front() ^ gray.back()) == 1;
 
     bool type_ok = true;
     std::string type_status;
@@ -70,14 +73,19 @@ static bool test_gray_code(int k, GrayCodeType type, const char* type_name, u64 
         type_status = "ok";
     }
 
-    bool pass = valid && cyclic && starts_at_zero;
+    bool pass = valid && cyclic && starts_at_zero && exit_axis_0;
 
     if (pass) {
         std::cout << "PASS (" << type_status << ")\n";
     } else {
         std::cout << "FAIL\n";
         std::cout << "    valid=" << valid << " cyclic=" << cyclic
-                  << " starts_at_zero=" << starts_at_zero << "\n";
+                  << " starts_at_zero=" << starts_at_zero
+                  << " exit_axis_0=" << exit_axis_0 << "\n";
+        if (!exit_axis_0 && !gray.empty()) {
+            u32 diff = gray.front() ^ gray.back();
+            std::cout << "    exit_diff=" << diff << " (expected 1)\n";
+        }
     }
 
     if (verbose || !pass) {
@@ -106,9 +114,10 @@ static bool test_random_reproducibility(int k) {
         return false;
     }
 
-    // For k=1, there's only one possible Gray code [0,1], so different seeds
-    // must give the same result. Skip that check for k=1.
-    if (k > 1) {
+    // For k=1 and k=2, there are very few distinct Gray codes after axis-0
+    // normalization, so different seeds often produce the same result.
+    // Skip that check for k <= 2.
+    if (k > 2) {
         auto gray3 = generate_random(k, 43);
         if (gray1 == gray3) {
             std::cout << "FAIL (different seeds gave same result)\n";

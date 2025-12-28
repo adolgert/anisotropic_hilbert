@@ -17,6 +17,7 @@ All generated codes are:
 - **Cyclic**: First and last vertices are adjacent
 - **Start at 0**: The path begins at vertex 0
 - **Complete**: All $2^k$ vertices visited exactly once
+- **Exit along axis 0**: The closing edge (from `gray[n-1]` back to `gray[0]`) is along axis 0, meaning `gray[0] XOR gray[n-1] == 1`
 
 For $k = 1$, the Gray code is simply `[0, 1]` - the unique Hamiltonian cycle on a single edge. This trivial case is included for completeness, as it's needed when the anisotropic Hilbert curve reduces to a single active axis. Note that for $k = 1$, all types (BRGC, Monotone, Balanced, Random) return the same result since there's only one possible Gray code.
 
@@ -102,7 +103,8 @@ int main() {
     // Generate BRGC for 3 dimensions (8 vertices)
     auto gray = generate_brgc(3);
 
-    // Print the path: 0 -> 1 -> 3 -> 2 -> 6 -> 7 -> 5 -> 4
+    // Print the path (normalized so exit is along axis 0)
+    // Exit edge: gray[7] -> gray[0] differs in bit 0 only
     for (u32 v : gray) {
         std::cout << v << " ";
     }
@@ -149,7 +151,9 @@ int main() {
 ## Algorithm Details
 
 ### BRGC
-Standard formula: `gray[w] = w ^ (w >> 1)`
+Standard formula: `gray[w] = w ^ (w >> 1)`, followed by exit axis normalization.
+
+The raw BRGC exits along axis $k-1$ (the highest bit). After normalization, this becomes axis 0 via bit rotation.
 
 ### Monotone
 Uses iterative backtracking with Warnsdorff heuristic, constrained so that `popcount(gray[i]) <= popcount(gray[i+2])`. This ensures the path oscillates between adjacent Hamming weight levels without going backwards.
@@ -170,6 +174,18 @@ Uses iterative backtracking that tracks transition counts per axis and prefers u
    - Rotation to start at vertex 0
 
 This guarantees a valid cyclic Gray code for any seed.
+
+### Exit Axis Normalization
+
+All Gray codes undergo a final normalization step to ensure the exit edge is along axis 0. This is done by applying a cyclic bit rotation to all vertices:
+
+1. Find the exit axis: `exit_axis = ctz(gray[0] XOR gray[n-1])` (count trailing zeros)
+2. If `exit_axis != 0`, rotate all vertex bits left by `(k - exit_axis) mod k`
+3. This moves bit `exit_axis` to bit position 0 for all vertices
+
+For example, if the raw BRGC for $k=3$ ends with exit along axis 2 (e.g., `gray[0]=0, gray[7]=4`), the normalization rotates the bits so the exit becomes axis 0 (e.g., `gray[0]=0, gray[7]=1`).
+
+This normalization is important for the anisotropic Hilbert curve because it ensures a consistent orientation when the Gray code is used as a template for traversing sub-hypercubes.
 
 ## References
 

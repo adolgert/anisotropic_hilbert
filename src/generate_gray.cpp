@@ -13,6 +13,37 @@ static constexpr size_t MAX_BACKTRACKS = 100000;
 // Utility functions
 // ============================================================================
 
+// Rotate left by r bits within a k-bit word
+static inline u32 rotl_bits(u32 x, int r, int k) {
+    if (k == 0) return x;
+    u32 mask = (1u << k) - 1;
+    x &= mask;
+    r = r % k;
+    if (r == 0) return x;
+    return ((x << r) | (x >> (k - r))) & mask;
+}
+
+// Normalize a Gray code so the exit edge is along axis 0.
+// The exit edge is from gray[n-1] back to gray[0].
+// After normalization: gray[0] XOR gray[n-1] == 1 (axis 0 direction).
+static void normalize_exit_axis(std::vector<u32>& gray, int k) {
+    if (gray.size() < 2 || k < 1) return;
+
+    u32 diff = gray.front() ^ gray.back();
+    if (diff == 0) return;  // Not a valid Gray code
+
+    int exit_axis = __builtin_ctz(diff);
+    if (exit_axis == 0) return;  // Already normalized
+
+    // Rotate all vertices so exit_axis becomes axis 0
+    // rotate left by (k - exit_axis) moves bit at exit_axis to position 0
+    int rotation = (k - exit_axis) % k;
+
+    for (u32& v : gray) {
+        v = rotl_bits(v, rotation, k);
+    }
+}
+
 // Warnsdorff degree: count of unvisited neighbors
 static int warnsdorff_degree(u32 v, const std::vector<bool>& visited, int k) {
     int count = 0;
@@ -112,6 +143,8 @@ std::vector<u32> generate_brgc(int k) {
     for (size_t w = 0; w < n; w++) {
         gray[w] = static_cast<u32>(w ^ (w >> 1));
     }
+    // Normalize so exit is along axis 0
+    normalize_exit_axis(gray, k);
     return gray;
 }
 
@@ -226,12 +259,18 @@ std::vector<u32> generate_random(int k, u64 seed) {
     for (int attempt = 0; attempt < 10; attempt++) {
         auto path = iterative_hamilton(k, &rng);
         if (!path.empty() && hamming_dist(path.front(), path.back()) == 1) {
+            normalize_exit_axis(path, k);
             return path;
         }
     }
 
     // Fallback: apply random hypercube automorphism to BRGC
-    auto base = generate_brgc(k);
+    // Note: generate_brgc already normalizes, but the automorphism changes the exit axis
+    size_t base_n = 1u << k;
+    std::vector<u32> base(base_n);
+    for (size_t w = 0; w < base_n; w++) {
+        base[w] = static_cast<u32>(w ^ (w >> 1));  // Raw BRGC without normalization
+    }
 
     // Random axis permutation
     std::vector<int> perm(static_cast<size_t>(k));
@@ -256,11 +295,14 @@ std::vector<u32> generate_random(int k, u64 seed) {
         result[w] = permuted ^ flip_mask;
     }
 
-    // Rotate so it starts at 0
+    // Rotate array so it starts at 0
     auto it = std::find(result.begin(), result.end(), 0u);
     if (it != result.begin() && it != result.end()) {
         std::rotate(result.begin(), it, result.end());
     }
+
+    // Normalize so exit is along axis 0
+    normalize_exit_axis(result, k);
 
     return result;
 }
@@ -364,6 +406,7 @@ std::vector<u32> generate_monotone(int k) {
     // Try iterative search with monotone constraint
     auto path = try_monotone_iterative(k);
     if (!path.empty()) {
+        normalize_exit_axis(path, k);
         return path;
     }
 
@@ -490,6 +533,7 @@ std::vector<u32> generate_balanced(int k) {
     for (int tolerance = 2; tolerance <= 6; tolerance += 2) {
         auto path = try_balanced_iterative(k, tolerance);
         if (!path.empty()) {
+            normalize_exit_axis(path, k);
             return path;
         }
     }
