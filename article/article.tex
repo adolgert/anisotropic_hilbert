@@ -11,6 +11,15 @@
 \usepackage{enumitem}       % For customized lists
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning}
+\usepackage{geometry}
+\geometry{
+  left=0.75in,
+  right=3in,
+  top=0.5in,
+  bottom=0.7in
+}
+\usepackage{setspace}
+\onehalfspacing
 
 % ============================================================================
 % THEOREM ENVIRONMENTS
@@ -80,6 +89,7 @@ We prove this construction yields a lattice-continuous mapping for arbitrary dim
 
 Space-filling curves are fundamental to combinatorial optimization and multidimensional indexing. For Compact Hilbert indices:
 \begin{itemize}
+    \item Mesh refinement requires adjacency.
     \item Vision transformers (ViT) and image flattening for AI.
     \item 3D point cloud analysis for 3D LiDAR data.
     \item Efficient nearest-neighbor search. This is used in vector databases like Pinecone or Milvus that power modern RAG. Eg., Approximate nearest neighbor or Hilbert R-trees.
@@ -167,6 +177,7 @@ Consider a point in $n$-dimensions where each dimension has extent $2^m$.
 A Hilbert curve defines a bijection $\mathcal{H}: (\mathbb{Z}_{2^m})^n\rightarrow \mathbb{Z}_{2^{nm}}$. The order of the curve is $m$.
 We consider Hilbert curves that map $0$ to $\mathbf{0}$ and $2^{mn}$ to $(2^m-1)\epsilon_0$ along the 0-axis.
 
+Definition. A Gray code $G: {0,\ldots,2^k-1} \to {0,\ldots,2^k-1}$ satisfies: $$G(i) \oplus G(i+1) = 2^{g(i)} \text{ for some } g(i) \in {0,\ldots,k-1}$$
 \section{Construction of Hilbert Curves}
 
 \subsection{Introduction}
@@ -195,6 +206,28 @@ affine transformations using a cyclic rotation $\rho^d$ of axes by $d$ and trans
 $$
     S_{e,d}(y) = \rho^d y + e
 $$
+
+Theorem (Characterization): A nested construction using Gray code $G$ and orientation sequence ${(e_i, d_i)}{i=0}^{2^n-1}$ produces a lattice-continuous Hilbert curve if and only if for all $i \in [0, 2^n-2]$: $$
+\epsilon{d_i} + e_i + e_{i+1} = G(i)
+$$
+
+Definition (Orientation Sequence). An orientation sequence for a 
+$k$-dimensional Hilbert curve is a sequence ${(e_i, d_i)}_{i=0}^{2^k-1}$
+where $e_i \in \mathbb{F}_2^k$ is the entry corner and
+$d_i \in \mathbb{Z}_k$ is the exit direction of the $i$-th subcube. Definition (Exit Corner).
+$$
+f_i = e_i \oplus 2^{d_i}
+$$
+ 
+Theorem 3.1 (Gluing Constraint — Necessity and Sufficiency). An orientation sequence produces a lattice-continuous Hilbert curve if and only if for all $i \in {0, \ldots, 2^k-2}$:
+$$e_{i+1} = e_i \oplus 2^{d_i} \oplus 2^{g(i)}$$
+where $g(i)$ is the Gray step axis at position $i$. Equivalently: $e_{i+1} = f_i \oplus 2^{g(i)}$ (exit of child $i$ and entry of child $i+1$ differ along the Gray axis). Proof of Sufficiency. (This is the main content) Lemma 3.2 (Oriented Gray Sequence). For fixed $(e,d)$, define:
+$$
+u(i) = T^{-1}_{(e,d)}(\mathrm{gc}(i))
+$$
+Then $u(i) \oplus u(i+1) = 2^{g'(i)}$ for some axis $g'(i)$. (Follows from adjacency preservation.) Lemma 3.3 (Child Endpoint Gluing). If the gluing constraint holds, then $f_i$ and $e_{i+1}$ are adjacent cube corners (differ in exactly one bit). Lemma 3.4 (Dyadic Boundary Step). If two adjacent $k$-cubes in a $2^k$ grid share a face along axis $j$, then the exit corner of one and entry corner of the other (both on that shared face) correspond to lattice points differing by exactly 1 in coordinate $j$. Theorem 3.5 (Lattice Continuity). Combining: every step in the traversal is a unit $L^1$ step.
+ 
+Proof of Necessity. If the constraint fails at some $i$, then $f_i$ and $e_{i+1}$ differ in $\neq 1$ bit, so the seam step has $L^1$ distance $\neq 1$.
 
 \subsection{Affine transforms and rotations}
 \begin{theorem}
@@ -274,6 +307,16 @@ no redundancy, no missing configurations.
 
 \subsection{Finding Correct Transforms}
 
+Need to search a graph defined on the space of $4^n$ vertices, but it's
+along the Hamiltonian path.
+
+We phrase seam conditions in terms of entry and exit of subcubes, but
+we can't construct a graph through all subcube vertices because it would
+lead to solutions that are mutiple steps within a subcube. That's OK.
+We can elide over subcube steps by stepping from one subcube exit to the
+next subcube exit. Then when we find paths go back and iterate over
+ways to reach one exit from the other.
+
 \begin{enumerate}
 \item For each vertex in the space of cubes of cubes
     \begin{enumerate}
@@ -296,13 +339,101 @@ How many paths are there? A lot. I don't know how many.
 \subsection{Algorithm to Find Points and Indices}
 
 Algorithm for point-to-index (not a surprise).
+\begin{algorithm}
+\caption{Point to Index}
+\label{alg:point-to-index}
+\begin{algorithmic}[1]
+\Require Point $p$
+\Ensure Point $p\in P_n$.
+
+\State $(e, d) \gets (0,0)$
+
+\For{$s = m_{\max}$ \textbf{downto} $1$}
+    \If{$s < m_{\max}$}
+        \State $(e_0, d_0)\gets \mu(w, k)$ \Comment{Table lookup of Hilbert rule.}
+        \State $(e, d)\gets (S_{e,d}(e_0, d_0), d+d_0\mod k)$ \Comment{Compose transforms}
+    \EndIf
+    \State $i=\text{gather\_plane}(p, k, s)$ \Comment{Extract level from dims}
+    \State $w = G^{-1}(S_{e,d}^{-1}(i, k))$ \Comment{Transform to rank}
+    \State $h = S_{k,w}(h)$ \Comment{Include in index}
+\EndFor
+\Return $h$
+\end{algorithmic}
+\end{algorithm}
 
 Algorithm for index-to-point (not a surprise).
+\begin{algorithm}
+\caption{Index to Point}
+\label{alg:index-to-point}
+\begin{algorithmic}[1]
+\Require Index $h$
+\Ensure Index $h\in [0,\ldots,2^{mn}-1]$.
+
+\State $(e, d) \gets (0,0)$
+
+\For{$s = m_{\max}$ \textbf{downto} $1$}
+    \If{$s < m_{\max}$}
+        \State $(e_0, d_0)\gets \mu(w, k)$ \Comment{Table lookup of Hilbert rule.}
+        \State $(e, d)\gets (S_{e,d}(e_0, d_0), d+d_0\mod k)$ \Comment{Compose transforms}
+    \EndIf
+    \State $i=\text{gather\_plane}(p, k, s)$ \Comment{Extract level from dims}
+    \State $w = G^{-1}(S_{e,d}^{-1}(i, k))$ \Comment{Transform to rank}
+    \State $h = S_{k,w}(h)$ \Comment{Include in index}
+\EndFor
+\Return $h$
+\end{algorithmic}
+\end{algorithm}
 
 Algorithm for next-index, which can generate a sequence of points in $O(1)$ time by recalculating transforms only as needed. (Maybe this is nice.
 Has anybody done this before?)
+\begin{algorithm}
+\caption{Neighbor Index with Cached State}
+\label{alg:neighbor}
+\begin{algorithmic}[1]
+\Require Cached decode state for $h_0 \to p_0$: entry states $(e^{(s)}, d^{(s)})$, digits $w^{(s)}$, active axes $A_s$, point $p_0$
+\Require Neighbor axis $j$ and direction $\delta \in \{-1, +1\}$
+\Ensure Hilbert index $h_1 = H(p_0 + \delta \cdot \epsilon_j)$, or $\bot$ if out of bounds
+
+\State $p'_j \gets p_{0,j} + \delta$
+\If{$p'_j < 0$ or $p'_j \geq 2^{m_j}$}
+    \Return $\bot$ \Comment{Out of bounds}
+\EndIf
+
+\State $\textit{changed} \gets p_{0,j} \XOR p'_j$ \Comment{Which bits differ}
+\State $s^* \gets \max\{s : \text{bit } (s{-}1) \text{ of } \textit{changed} \text{ is set and } j \in A_s\}$
+
+\State $h_1 \gets 0$
+\For{$s = m_{\max}$ \textbf{downto} $s^* + 1$} \Comment{Copy unchanged high digits}
+    \State $h_1 \gets (h_1 \SHL k_s) \OR w^{(s)}$
+\EndFor
+
+\State $(e, d) \gets (e^{(s^*)}, d^{(s^*)})$ \Comment{Restore cached entry state}
+
+\For{$s = s^*$ \textbf{downto} $1$} \Comment{Recompute from $s^*$ down}
+    \State $\ell \gets 0$
+    \For{$t = 0$ \textbf{to} $k_s - 1$} \Comment{Pack level-$s$ bits of neighbor}
+        \State $a \gets A_s[t]$
+        \State $c \gets \begin{cases} p'_j & \text{if } a = j \\ p_{0,a} & \text{otherwise} \end{cases}$
+        \State $\ell \gets \ell \OR (\bitfn(c, s{-}1) \SHL t)$
+    \EndFor
+    \State $w \gets \gc^{-1}(T_{(e,d)}(\ell))$ \Comment{Encode: transform and Gray decode}
+    \State $h_1 \gets (h_1 \SHL k_s) \OR w$
+    \State $e \gets e \XOR \mathrm{rotL}(\entry(w), d{+}1, k_s)$ \Comment{Update state}
+    \State $d \gets (d + \dir(k_s, w) + 1) \mod k_s$
+    \If{$s > 1$ and $k_{s-1} > k_s$} \Comment{Embed if axes activate}
+        \State $(e, d) \gets \mathrm{Embed}(A_s, A_{s-1}, e, d)$
+    \EndIf
+\EndFor
+\Return $h_1$
+\end{algorithmic}
+\end{algorithm}
 
 \section{Affine Embedding Framework}
+\begin{itemize}
+\item Level $s \in {1, \ldots, m_{\max}}$
+\item Active axis set $A_s = {j : m_j \geq s}$
+\item $k_s = |A_s|$
+\end{itemize}
 
 We start with a Hilbert curve for which we know that
 $$
@@ -347,6 +478,15 @@ $$
     \hat{S}_{i}^{(k+\dk)}\embed_{\dk}\epsilon_0 \vplus
     \hat{S}_{i+1}^{(k+\dk)}\embed_{\dk}\mathbf{0} = \embed_{\dk}g_k(i)
 $$
+
+When embedding state $(e, d)$ from $k$ to $k+\delta$ dimensions:
+Embed $e$ by placing bits on the same physical axes
+Embed $d$ by preserving the axis label: if $d$ pointed to axis $A_s[d]$, find its new index in $A_{s-1}$
+Theorem 4.1 (Embedded Gluing Constraint). If $(e_i, d_i)$ satisfies the gluing constraint in $k$ dimensions, then the embedded sequence $(\kappa(e_i), d_i + \delta)$ satisfies the gluing constraint in $k + \delta$ dimensions, provided the Gray code is also embedded consistently. Proof. Your current §5 content, but now with the axis-label-preservation invariant made explicit. The key equation:
+$$
+\epsilon_{d_i + \delta} + \rho^{\delta} e_i + \rho^{\delta} e_{i+1} = \rho^{\delta} g_k(i)
+$$
+shows the constraint is preserved under embedding.
 
 \section{Lattice Continuity of the Construction}
 
@@ -405,6 +545,31 @@ It's $\mathcal{O}(nm)$ where $n$ is the number
 of dimensions and each dimension has extent $2^m$. If you consider
 bit operations as handling the $n$, then it is $\mathcal{O}(m)$.
 
+
+\begin{algorithm}[H]
+\caption{Encode: Point $\to$ Hilbert Index}
+\begin{algorithmic}[1]
+\Require Point $\mathbf{p} \in P(\mathbf{m})$
+\Ensure Hilbert index $h \in \{0, \ldots, 2^M - 1\}$
+\State $h \gets 0$
+\State $e \gets 0$, $d \gets 0$ \Comment{Initial state: standard orientation}
+\State Compute $A_s$ for all $s$ \Comment{Active axes sorted by $(m_j, j)$}
+\For{$s = m_{\max}$ down to $1$}
+    \State $k \gets k_s$ \Comment{Number of active axes at level $s$}
+    \State $\ell \gets \sum_{t=0}^{k-1} \bitfn(p_{A[t]}, s-1) \cdot 2^t$ \Comment{Pack bits from active axes}
+    \State $\bar{\ell} \gets T_{(e,d)}(k, \ell)$ \Comment{Apply orientation transform}
+    \State $w \gets \gcinv(\bar{\ell})$ \Comment{Convert to sub-hypercube index}
+    \State Append $w$ to $h$ \Comment{$h \gets h \cdot 2^k + w$}
+    \State $e \gets e \XOR (\entry_k(w) \ROTL (d+1))$
+    \State $d \gets (d + \dir_k(w) + 1) \mod k$
+
+    \If{$k_{s-1} > k$} \Comment{Activation event: new axes become active}
+        \State $(e', d') \gets \mathrm{Embed}_{A_s \to A_{s-1}}(e, d)$
+    \EndIf
+\EndFor
+\State \Return $h$
+\end{algorithmic}
+\end{algorithm}
 
 \section{Experimental Validation}
 
