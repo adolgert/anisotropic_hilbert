@@ -8,8 +8,8 @@
  * - Axes are labeled 0..n-1.
  * - At level s (MSB-first), active axes are those with m_j >= s, ordered by
  *   priority (m_j, j).
- * - The per-level state is the affine map S_{e,delta}(x) = rotL(delta) x XOR e
- *   on the active list (delta = d+1).
+ * - The per-level state is the affine map S_{e,d}(x) = rotL(d) x XOR e
+ *   on the active list.
  * - Digits are variable-width (k_s bits) and are packed MSB-first into the
  *   Hilbert index.
  *
@@ -29,53 +29,66 @@
 typedef __uint128_t hindex_t;
 typedef uint32_t coord_t;
 
-typedef struct {
+typedef struct
+{
   uint32_t e; /* entry mask in the current active list */
   uint32_t d; /* direction index in the current active list */
 } hilbert_state_t;
 
-typedef struct {
-  int mmax; /* max(extents bits) */
-  int total_bits; /* sum(extents bits)*/
+typedef struct
+{
+  int mmax;                    /* max(extents bits) */
+  int total_bits;              /* sum(extents bits)*/
   int k_level[MAX_LEVELS + 1]; /* Number of active axes at level */
   int axes_ordered[MAX_DIMS];
 } hilbert_curve_t;
 
-static inline uint32_t mask_bits(uint32_t bits) {
+static inline uint32_t mask_bits(uint32_t bits)
+{
   return (bits >= 32u) ? 0xFFFFFFFFu : ((1u << bits) - 1u);
 }
 
-static inline uint32_t rotl_bits(uint32_t x, uint32_t r, uint32_t bits) {
-  if (bits == 0u) return x;
-  if (bits == 32u) {
+static inline uint32_t rotl_bits(uint32_t x, uint32_t r, uint32_t bits)
+{
+  if (bits == 0u)
+    return x;
+  if (bits == 32u)
+  {
     r &= 31u;
     return (r == 0u) ? x : (uint32_t)((x << r) | (x >> (32u - r)));
   }
   const uint32_t mask = mask_bits(bits);
   x &= mask;
   r %= bits;
-  if (r == 0u) return x;
+  if (r == 0u)
+    return x;
   return (uint32_t)(((x << r) | (x >> (bits - r))) & mask);
 }
 
-static inline uint32_t rotr_bits(uint32_t x, uint32_t r, uint32_t bits) {
-  if (bits == 0u) return x;
-  if (bits == 32u) {
+static inline uint32_t rotr_bits(uint32_t x, uint32_t r, uint32_t bits)
+{
+  if (bits == 0u)
+    return x;
+  if (bits == 32u)
+  {
     r &= 31u;
     return (r == 0u) ? x : (uint32_t)((x >> r) | (x << (32u - r)));
   }
   const uint32_t mask = mask_bits(bits);
   x &= mask;
   r %= bits;
-  if (r == 0u) return x;
+  if (r == 0u)
+    return x;
   return (uint32_t)(((x >> r) | (x << (bits - r))) & mask);
 }
 
-static inline uint32_t gray_code(uint32_t x) {
+static inline uint32_t gray_code(uint32_t x)
+{
   return x ^ (x >> 1);
 }
 
-static inline uint32_t gray_decode(uint32_t g) {
+static inline uint32_t gray_decode(uint32_t g)
+{
   uint32_t x = g;
   x ^= x >> 1;
   x ^= x >> 2;
@@ -90,17 +103,21 @@ static inline uint32_t gray_decode(uint32_t g) {
  * Standard BRGC exits at axis k-1; rotating by 1 moves exit to axis 0.
  * This matches the BRGC usage by Butz and Hamilton.
  */
-static inline uint32_t gray_code_axis0(uint32_t w, uint32_t k) {
+static inline uint32_t gray_code_axis0(uint32_t w, uint32_t k)
+{
   return rotl_bits(gray_code(w), 1u, k);
 }
 
-static inline uint32_t gray_decode_axis0(uint32_t g, uint32_t k) {
+static inline uint32_t gray_decode_axis0(uint32_t g, uint32_t k)
+{
   return gray_decode(rotr_bits(g, 1u, k));
 }
 
-static inline uint32_t trailing_ones(uint32_t x) {
+static inline uint32_t trailing_ones(uint32_t x)
+{
   uint32_t c = 0;
-  while ((x & 1u) != 0u) {
+  while ((x & 1u) != 0u)
+  {
     c++;
     x >>= 1;
   }
@@ -108,67 +125,85 @@ static inline uint32_t trailing_ones(uint32_t x) {
 }
 
 /* Hamilton entry sequence e(w) for a k-dimensional cube. */
-static inline uint32_t child_entry(uint32_t w) {
-  if (w == 0u) return 0u;
-  return gray_code((w - 1u) & ~1u);
+static inline uint32_t child_entry(uint32_t w, uint32_t k)
+{
+  if (w == 0u)
+    return 0u;
+  return rotl_bits(gray_code((w - 1u) & ~1u), 1, k);
 }
 
 /* Hamilton direction sequence d(w) for a k-dimensional cube. */
-static inline uint32_t child_dir(uint32_t w, uint32_t k) {
-  if (w == 0u) return 0u;
-  if ((w & 1u) != 0u) return trailing_ones(w) % k;
-  return trailing_ones(w - 1u) % k;
+static inline uint32_t child_dir(uint32_t w, uint32_t k)
+{
+  if (w == 0u)
+    return 1u;
+  if ((w & 1u) != 0u)
+    return (trailing_ones(w) + 1) % k;
+  return (trailing_ones(w - 1u) + 1) % k;
 }
 
 /* S_{e,d}(x) = rotL(d) x XOR e. */
-static inline uint32_t affine_apply(uint32_t x, uint32_t e, uint32_t d, uint32_t k) {
+static inline uint32_t affine_apply(uint32_t x, uint32_t e, uint32_t d, uint32_t k)
+{
   return (rotl_bits(x, d, k) ^ e) & mask_bits(k);
 }
 
 /* S^{-1}(y) = rotR(d) (y XOR e). */
-static inline uint32_t affine_apply_inv(uint32_t y, uint32_t e, uint32_t d, uint32_t k) {
+static inline uint32_t affine_apply_inv(uint32_t y, uint32_t e, uint32_t d, uint32_t k)
+{
   return rotr_bits((y ^ e), d, k) & mask_bits(k);
 }
 
-typedef struct {
+typedef struct
+{
   int axis;
   int exp;
 } axis_exp_t;
 
 /* Sort axes by priority (m_j, j). */
-static void sort_axes_by_priority(const int *m, int n, int *order) {
+static void sort_axes_by_priority(const int *m, int n, int *order)
+{
   axis_exp_t items[MAX_DIMS];
-  for (int i = 0; i < n; i++) {
+  for (int i = 0; i < n; i++)
+  {
     items[i].axis = i;
     items[i].exp = m[i];
   }
-  for (int i = 1; i < n; i++) {
+  for (int i = 1; i < n; i++)
+  {
     axis_exp_t key = items[i];
     int j = i - 1;
     while (j >= 0 && (items[j].exp > key.exp ||
-           (items[j].exp == key.exp && items[j].axis > key.axis))) {
+                      (items[j].exp == key.exp && items[j].axis > key.axis)))
+    {
       items[j + 1] = items[j];
       j--;
     }
     items[j + 1] = key;
   }
-  for (int i = 0; i < n; i++) {
+  for (int i = 0; i < n; i++)
+  {
     order[i] = items[i].axis;
   }
 }
 
-
-static bool build_active_axes(const int *m, int n, hilbert_curve_t *curve) {
-  if (!m || n <= 0 || n > MAX_DIMS || !curve) return false;
+static bool build_active_axes(const int *m, int n, hilbert_curve_t *curve)
+{
+  if (!m || n <= 0 || n > MAX_DIMS || !curve)
+    return false;
 
   int mmax = 0;
   int total_bits = 0;
-  for (int i = 0; i < n; i++) {
-    if (m[i] < 0 || m[i] > MAX_LEVELS) return false;
-    if (m[i] > mmax) mmax = m[i];
+  for (int i = 0; i < n; i++)
+  {
+    if (m[i] < 0 || m[i] > MAX_LEVELS)
+      return false;
+    if (m[i] > mmax)
+      mmax = m[i];
     total_bits += m[i];
   }
-  if (total_bits > MAX_INDEX_BITS) return false;
+  if (total_bits > MAX_INDEX_BITS)
+    return false;
 
   curve->mmax = mmax;
   curve->total_bits = total_bits;
@@ -177,8 +212,10 @@ static bool build_active_axes(const int *m, int n, hilbert_curve_t *curve) {
   curve->k_level[0] = 0;
 
   int axis_idx = 0;
-  for (int s = 1; s <= mmax; s++) {
-    while (axis_idx < n && m[curve->axes_ordered[axis_idx]] < s) {
+  for (int s = 1; s <= mmax; s++)
+  {
+    while (axis_idx < n && m[curve->axes_ordered[axis_idx]] < s)
+    {
       axis_idx++;
     }
     curve->k_level[s] = n - axis_idx;
@@ -191,9 +228,11 @@ static bool build_active_axes(const int *m, int n, hilbert_curve_t *curve) {
  * Gather bits from coordinates into a plane value.
  * Collects bit (s-1) from each active axis into a k-bit plane.
  */
-static inline uint32_t gather_plane(const coord_t *point, const int *A, int k, int s) {
+static inline uint32_t gather_plane(const coord_t *point, const int *A, int k, int s)
+{
   uint32_t plane = 0u;
-  for (int j = 0; j < k; j++) {
+  for (int j = 0; j < k; j++)
+  {
     int ax = A[j];
     plane |= ((point[ax] >> (s - 1)) & 1u) << j;
   }
@@ -204,21 +243,27 @@ static inline uint32_t gather_plane(const coord_t *point, const int *A, int k, i
  * Scatter bits from a plane value to coordinates.
  * Distributes each bit of the k-bit plane to bit (s-1) of the corresponding axis.
  */
-static inline void scatter_plane(coord_t *point, const int *A, int k, int s, uint32_t plane) {
-  for (int j = 0; j < k; j++) {
+static inline void scatter_plane(coord_t *point, const int *A, int k, int s, uint32_t plane)
+{
+  for (int j = 0; j < k; j++)
+  {
     int ax = A[j];
     point[ax] |= ((plane >> j) & 1u) << (s - 1);
   }
 }
 
-hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n) {
+hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n)
+{
   hilbert_curve_t curve = {0};
 
-  if (!point || !m) return (hindex_t)0;
-  if (!build_active_axes(m, n, &curve)) {
+  if (!point || !m)
+    return (hindex_t)0;
+  if (!build_active_axes(m, n, &curve))
+  {
     return (hindex_t)0;
   }
-  if (curve.mmax == 0) return (hindex_t)0;
+  if (curve.mmax == 0)
+    return (hindex_t)0;
 
   hilbert_state_t st = {0u, 0u};
   hindex_t h = 0;
@@ -230,15 +275,17 @@ hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n) {
   uint32_t w = gray_decode_axis0(pre, (uint32_t)parent_k) & parent_mask;
   h = (h << parent_k) | (hindex_t)w;
 
-  for (int s = curve.mmax - 1; s >= 1; s--) {
+  for (int s = curve.mmax - 1; s >= 1; s--)
+  {
     int k = curve.k_level[s];
     assert(k != 0);
 
-    uint32_t entry = child_entry(w) & parent_mask;
-    st.e = affine_apply(entry, st.e, st.d + 1u, (uint32_t)parent_k);
-    st.d = (st.d + child_dir(w, (uint32_t)parent_k) + 1u) % (uint32_t)parent_k;
+    uint32_t entry = child_entry(w, parent_k) & parent_mask;
+    st.e = affine_apply(entry, st.e, st.d, (uint32_t)parent_k);
+    st.d = (st.d + child_dir(w, (uint32_t)parent_k)) % (uint32_t)parent_k;
 
-    if (k > parent_k) {
+    if (k > parent_k)
+    {
       int k_shift = k - parent_k;
       st.e <<= k_shift;
       st.d += (uint32_t)k_shift;
@@ -259,16 +306,20 @@ hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n) {
   return h;
 }
 
-void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point) {
-  if (!point || !m || n <= 0 || n > MAX_DIMS) return;
+void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point)
+{
+  if (!point || !m || n <= 0 || n > MAX_DIMS)
+    return;
   memset(point, 0, (size_t)n * sizeof(coord_t));
 
   hilbert_curve_t curve = {0};
 
-  if (!build_active_axes(m, n, &curve)) {
+  if (!build_active_axes(m, n, &curve))
+  {
     return;
   }
-  if (curve.mmax == 0) return;
+  if (curve.mmax == 0)
+    return;
 
   int bit_pos = curve.total_bits;
   hilbert_state_t st = {0u, 0u};
@@ -286,16 +337,18 @@ void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point) {
   scatter_plane(point, A, parent_k, curve.mmax, plane);
 
   /* Remaining levels: transform from parent, then decode */
-  for (int s = curve.mmax - 1; s >= 1; s--) {
+  for (int s = curve.mmax - 1; s >= 1; s--)
+  {
     int k = curve.k_level[s];
     assert(k != 0);
 
     /* State update from parent level */
-    uint32_t entry = child_entry(w) & parent_mask;
-    st.e = affine_apply(entry, st.e, st.d + 1u, (uint32_t)parent_k);
-    st.d = (st.d + child_dir(w, (uint32_t)parent_k) + 1u) % (uint32_t)parent_k;
+    uint32_t entry = child_entry(w, parent_k) & parent_mask;
+    st.e = affine_apply(entry, st.e, st.d, (uint32_t)parent_k);
+    st.d = (st.d + child_dir(w, (uint32_t)parent_k)) % (uint32_t)parent_k;
 
-    if (k > parent_k) {
+    if (k > parent_k)
+    {
       int k_shift = k - parent_k;
       st.e <<= k_shift;
       st.d += (uint32_t)k_shift;
@@ -316,23 +369,27 @@ void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point) {
   }
 }
 
-uint64_t hilbert_affine_encode_64(const coord_t *point, const int *m, int n) {
+uint64_t hilbert_affine_encode_64(const coord_t *point, const int *m, int n)
+{
   return (uint64_t)hilbert_affine_encode(point, m, n);
 }
 
-void hilbert_affine_decode_64(uint64_t h, const int *m, int n, coord_t *point) {
+void hilbert_affine_decode_64(uint64_t h, const int *m, int n, coord_t *point)
+{
   hilbert_affine_decode((hindex_t)h, m, n, point);
 }
 
 void hilbert_affine_encode_128(const coord_t *point, const int *m, int n,
-                               uint64_t *h_lo, uint64_t *h_hi) {
+                               uint64_t *h_lo, uint64_t *h_hi)
+{
   hindex_t h = hilbert_affine_encode(point, m, n);
   *h_lo = (uint64_t)h;
   *h_hi = (uint64_t)(h >> 64);
 }
 
 void hilbert_affine_decode_128(uint64_t h_lo, uint64_t h_hi, const int *m, int n,
-                               coord_t *point) {
+                               coord_t *point)
+{
   hindex_t h = ((hindex_t)h_hi << 64) | h_lo;
   hilbert_affine_decode(h, m, n, point);
 }
