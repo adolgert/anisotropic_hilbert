@@ -310,4 +310,3 @@ This also makes correctness checks cleaner: the derived data is exactly the data
 
 If you want, I can rewrite the algorithm in purely (\mathrm{GF}(2)^n) terms (no ({0,1,2,3}^n) lattice at all), equivalent to what the C++ code is searching for, and show the explicit mapping between a found exit-path and the per-cube ((\ell^{\text{in}}_w,a_w)) sequence the tables encode.
 
-# Improving Curve Generation
