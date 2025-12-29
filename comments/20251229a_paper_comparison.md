@@ -69,6 +69,8 @@ Relevant theorems:
 - **Theorem 6** (p.11): 3D Classification - exactly 1536 structurally different simple 3D Hilbert curves
 - **Theorem 7** (p.14): Locality Bounds for 2D
 
+ajd: The definitions about indexings that form Hilbert curves are pretty loose. They assume it's the same curve at each level. He's making it quite consistent to use the same indexing and same rotations at every level.
+
 ---
 
 ## Haverkort - Sixteen Space-Filling Curves (28 pages)
@@ -79,6 +81,8 @@ Relevant theorems:
 | Fast Search | NO | Section 9 is for traversal generation, not Gray code search |
 | 2→Multi Level | FULL | Section 2 notation system, recursive structure implicit throughout |
 | Lattice-Continuous | PARTIAL | Pages 13-15, face-continuity properties |
+
+ajd: Very quick take.
 
 ---
 
@@ -112,6 +116,8 @@ Relevant content:
 - **Lemmas 1-6** (pp.20-23): Necessary conditions on gate locations
 - **Property 2.2** (p.4): Vertex-continuity definition
 
+ajd: no
+
 ---
 
 ## Haverkort - Four-Dimensional Hilbert Curves for R-trees (20 pages)
@@ -122,6 +128,8 @@ Relevant content:
 | Fast Search | NO | Section 3.1 is verification, not search |
 | 2→Multi Level | NO | Empirically verified but not proven |
 | Lattice-Continuous | PARTIAL | Properties 2.1-2.2 (p.5) on continuity |
+
+ajd: no
 
 ---
 
@@ -142,6 +150,8 @@ Relevant theorems:
 - **Theorem 19** (pp.15-16): Existence/uniqueness of hyperorthogonal well-folded curves
 - **Lemma 24** (p.18): Self-similar extension property
 - **Theorem 46** (p.23): Existence for any d ≥ 3
+
+ajd: Haverkort shows that a Hilbert curve exists that is self-similar, hyperorthogonal, well-folded, in d-dimensions. Not for any Gray code.
 
 ---
 
@@ -213,6 +223,9 @@ Relevant theorems:
 | 2→Multi Level | FULL | Section 2.2 (p.8) shows iterative multi-level extension |
 | Lattice-Continuous | NO | Not addressed |
 
+ajd: Sure. It's a process at least.
+
+
 ---
 
 ## Couch, Daniel & McNicholl 2012 - Computing Space-Filling Curves (17 pages)
@@ -228,6 +241,30 @@ Relevant theorems (for general theory):
 - **Theorem 6** (pp.384-385): Effective Hahn-Mazurkiewicz Theorem
 - **Theorem 5** (p.383): Effective Aleksandrov-Hausdorff Theorem
 
+This paper is about computable analysis — asking when you can algorithmically construct a space-filling curve onto a given target space. Let me explain the two theorems:
+
+  Theorem 5 (Effective Aleksandrov-Hausdorff)
+
+  Statement: From a "name" (computational description) of a compact set X ⊆ ℝⁿ, we can uniformly compute a surjection from the Cantor set C onto X.
+
+  Meaning: The Cantor set can always be computably mapped onto any compact set. This is the "easy" first step — Cantor sets are simpler than intervals because they're totally disconnected.
+
+  Theorem 6 (Effective Hahn-Mazurkiewicz)
+
+  Statement: From a name of a Peano continuum X ⊆ ℝⁿ and a local connectivity operator for X, we can uniformly compute a surjection g : [0,1] → X.
+
+  Meaning: To compute an actual space-filling curve (from the interval [0,1]), you need two pieces of information:
+  1. A description of the target space X
+  2. A "local connectivity operator" — algorithmic access to how neighborhoods decompose into connected pieces
+
+  Why this matters for Hilbert curves
+
+  The paper's key negative result (Theorem 1) shows there exists a computable Peano continuum that is not the image of any computable function on [0,1]. This proves the local connectivity operator is genuinely necessary.
+
+  Connection to Alber's formalism: The recursive self-similar structure that Alber captures with generators and permutations is essentially providing the "local connectivity" information algorithmically. The CSSI framework tells you how to decompose the space at each scale — which is precisely what a local connectivity operator does.
+
+  In discrete settings (finite grids), this is less of an issue, but the theory explains why the recursive structure of Hilbert curves isn't just elegant — it's computationally essential.
+
 ---
 
 ## Franco 2018 - Alternative Patterns of Multidimensional Hilbert Curve (22 pages)
@@ -239,6 +276,8 @@ Relevant theorems (for general theory):
 | 2→Multi Level | FULL | Section 3.2, Figure 4 (p.8424), Table 5 (p.8430) |
 | Lattice-Continuous | NO | Focuses on locality metrics |
 
+ajd: This one does new patterns by hand.
+
 ---
 
 ## Franco 2025 - Pareto Multi-Objective Optimization (11 pages)
@@ -249,6 +288,8 @@ Relevant theorems (for general theory):
 | Fast Search | FULL | Section 3 (pp.3-5), isometry-free detector O(D + D log D) |
 | 2→Multi Level | FULL | Section 2.2 (pp.3-4), Figure 3 (p.4) |
 | Lattice-Continuous | NO | Focuses on Pareto optimality |
+
+ajd: A limited search to look for best locality.
 
 ---
 

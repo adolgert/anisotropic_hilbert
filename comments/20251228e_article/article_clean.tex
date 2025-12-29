@@ -1,0 +1,673 @@
+% Cleaned draft based on article.tex
+% Goal: consistent notation centered on \mathbb{F}_2^n, with a clear step-by-step argument.
+
+\documentclass[11pt]{article}
+
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+
+% -------------------- Theorem environments --------------------
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+
+% -------------------- Notation --------------------
+\newcommand{\F}{\mathbb{F}_2}
+\newcommand{\V}[1]{\F^{#1}}
+\newcommand{\xor}{\oplus}
+\newcommand{\zero}{\mathbf{0}}
+\newcommand{\e}[1]{\mathbf{e}_{#1}}
+\newcommand{\wt}{\mathrm{wt}}
+\newcommand{\Gray}{G}          % Gray code: rank -> vertex
+\newcommand{\Rank}{R}          % rank inverse: vertex -> rank
+\newcommand{\stepaxis}{\sigma}% Gray step axis function
+\newcommand{\rot}{\rho}       % cyclic coordinate rotation
+\newcommand{\T}{T}             % affine orientation map
+
+\newcommand{\bits}{\{0,1\}}
+
+% For clarity we index physical axes by j \in \{0,\dots,n-1\}.
+% We index coordinates of \V{k} by t \in \{0,\dots,k-1\}.
+
+\title{Lattice-Continuous Compact Hilbert Indices via Affine Transformations on Hypercubes}
+\author{Andrew Dolgert}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Compact Hilbert indices (CHIs) map a dyadic hyperrectangle to a one-dimensional index, but existing CHI constructions for unequal side lengths do not guarantee lattice continuity: consecutive indices may correspond to nonadjacent lattice points.
+We give a construction in which every recursion step is described in \(\mathbb{F}_2^n\) using (i) a Gray code on the hypercube and (ii) affine hypercube automorphisms.
+Our main technical contribution is a \(\mathbb{F}_2^k\) characterization of the two-level ``gluing'' constraints and an efficient dynamic program to compute valid orientation tables for an arbitrary parent Gray code.
+We then lift these tables to arbitrary orders and unequal side lengths via an axis-activation (embedding) framework.
+The resulting encode/decode procedures run in \(O(mn)\) bit operations for side lengths \(2^{m_j}\).
+\end{abstract}
+
+\section{Introduction}
+
+Let \(n\ge 1\) and let \(\mathbf{m}=(m_0,\dots,m_{n-1})\in\mathbb{N}^n\).
+Define the dyadic hyperrectangle
+\[
+\mathcal{D}(\mathbf{m}) \coloneqq \prod_{j=0}^{n-1} \{0,1,\dots,2^{m_j}-1\}\subset \mathbb{Z}^n,
+\qquad
+M \coloneqq \sum_{j=0}^{n-1} m_j.
+\]
+We view \(\mathcal{D}(\mathbf{m})\) as a grid graph: two points \(p,q\in\mathcal{D}(\mathbf{m})\) are adjacent (written \(p\sim q\)) if \(\lVert p-q\rVert_1=1\).
+
+\begin{definition}[Lattice-continuous index]
+A bijection \(H:\mathcal{D}(\mathbf{m})\to\{0,1,\dots,2^M-1\}\) is \emph{lattice-continuous} if
+\[
+H^{-1}(t)\sim H^{-1}(t+1)\qquad\text{for all }t\in\{0,\dots,2^M-2\}.
+\]
+Equivalently, \((H^{-1}(0),H^{-1}(1),\dots,H^{-1}(2^M-1))\) is a Hamiltonian path of the grid graph.
+\end{definition}
+
+Hilbert-type space-filling curves are widely used for locality-preserving linearization.
+A standard (equal-side) Hilbert curve of order \(m\) yields a lattice-continuous index on \(\{0,\dots,2^m-1\}^n\).
+For unequal side lengths, compact Hilbert indices (CHIs) give efficient encoders/decoders \cite{hamilton2008compact}, but the recursion may introduce ``seam jumps'' between subcubes.
+This paper focuses on a variant that preserves the Hamiltonian (lattice-continuous) property while retaining a compact recursive representation.
+
+\paragraph{Contributions.}
+All arguments are expressed in \(\mathbb{F}_2^n\), with implementation order discussed separately.
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+\item We formalize the two-level (\(4^k\)) gluing constraints for an arbitrary parent Gray code as a constrained walk in \(\mathbb{F}_2^k\) (\S\ref{sec:twolevel}).
+\item We give a dynamic program that constructs valid orientation tables without searching the full \(4^k\) lattice graph (\S\ref{sec:tables}), and we prove existence for all \(k\ge 2\) and all parent Gray codes with fixed endpoints.
+\item We lift the construction to arbitrary order and unequal side lengths using an axis-activation embedding framework (\S\ref{sec:embedding}), obtaining \(O(mn)\) encode/decode algorithms.
+\end{itemize}
+
+\section{Hypercubes, Gray codes, and affine orientations}\label{sec:prelim}
+
+\subsection{The hypercube over \(\mathbb{F}_2\)}
+For \(k\ge 1\), let \(V_k\coloneqq\V{k}\) and identify it with the vertex set of the \(k\)-dimensional hypercube graph \(Q_k\).
+Vertices \(u,v\in V_k\) are adjacent if \(u\xor v\in\{\e{0},\dots,\e{k-1}\}\).
+We write \(\wt(x)\) for the Hamming weight of \(x\in V_k\).
+
+\subsection{Gray codes}
+A (binary reflected) Gray code is a Hamiltonian path on \(Q_k\).
+We represent a Gray code as a bijection
+\[
+\Gray_k:\{0,1,\dots,2^k-1\}\to V_k,
+\qquad
+\Rank_k:\,V_k\to\{0,1,\dots,2^k-1\}
+\]
+with \(\Rank_k=\Gray_k^{-1}\), and we assume the boundary conditions
+\[
+\Gray_k(0)=\zero,
+\qquad
+\Gray_k(2^k-1)=\e{0}.
+\]
+For each \(w\in\{0,\dots,2^k-2\}\) there is a unique axis \(\stepaxis_k(w)\in\{0,\dots,k-1\}\) such that
+\begin{equation}\label{eq:gray-step}
+\Gray_k(w+1)=\Gray_k(w)\xor \e{\stepaxis_k(w)}.
+\end{equation}
+Many Gray codes exist \cite{haverkort2016many}; our arguments in \S\ref{sec:twolevel}--\S\ref{sec:tables} hold for any fixed \(\Gray_k\) satisfying the boundary conditions above.
+
+\subsection{Affine automorphisms and orientations}
+A map \(A:V_k\to V_k\) is an \emph{affine automorphism} of \(Q_k\) if it is of the form
+\(
+A(x)=P x\xor a
+\)
+where \(P\) is a coordinate permutation matrix over \(\F\) and \(a\in V_k\).
+Affine automorphisms preserve adjacency.
+
+We will use the following convenient generating family.
+Let \(\rot\) be the cyclic coordinate rotation on \(V_k\) defined by
+\[
+(\rot x)_t \coloneqq x_{(t-1)\bmod k}\qquad (t=0,\dots,k-1).
+\]
+For \(e\in V_k\) and \(d\in\{0,\dots,k-1\}\), define
+\begin{equation}\label{eq:affine-T}
+\T_{e,d}(x) \coloneqq \rot^{d} x \xor e.
+\end{equation}
+Then
+\(
+\T_{e,d}(\zero)=e
+\)
+and
+\(
+\T_{e,d}(\e{0})=e\xor \e{d}.
+\)
+Thus \((e,d)\) specifies a directed edge \((e, e\xor \e{d})\) in \(Q_k\).
+
+\begin{definition}[Orientation state]
+An \emph{orientation state} in dimension \(k\) is a pair \((e,d)\in V_k\times\{0,\dots,k-1\}\).
+We call \(e\) the \emph{entry corner} and \(d\) the \emph{exit axis}.
+The corresponding exit corner is \(f\coloneqq e\xor \e{d}\).
+\end{definition}
+
+\begin{remark}
+In the mathematical development we only require that, for each subcube, the child traversal starts at the chosen entry corner and ends at the chosen adjacent exit corner.
+Any affine automorphism mapping \(\zero\mapsto e\) and \(\e{0}\mapsto e\xor\e{d}\) may be used; \eqref{eq:affine-T} is a convenient concrete choice.
+\end{remark}
+
+\section{Two-level gluing on the \(4^k\) lattice}\label{sec:twolevel}
+
+This section analyzes the minimal nontrivial refinement: a \(k\)-dimensional grid with side length \(4\), i.e. \(4^k\) lattice points.
+The purpose is to characterize which sequences of child orientations can be glued to form a lattice-continuous traversal.
+
+\subsection{High/low-bit decomposition}
+Let
+\(
+\mathcal{L}_k \coloneqq \{0,1,2,3\}^k.
+\)
+Every \(x\in\mathcal{L}_k\) decomposes uniquely as
+\begin{equation}\label{eq:hl}
+ x = 2h + \ell,\qquad h,\ell\in V_k,
+\end{equation}
+where \(h\) is the vector of high bits and \(\ell\) is the vector of low bits.
+We interpret \(h\) as selecting one of the \(2^k\) child \(2\times\cdots\times 2\) subcubes, and \(\ell\) as selecting a corner within that child cube.
+
+Fix a parent Gray code \(\Gray_k\).
+The parent visits child cubes in the order
+\(
+ h_w \coloneqq \Gray_k(w),\ w=0,\dots,2^k-1.
+\)
+Let \(d_w\coloneqq \stepaxis_k(w)\) so that \eqref{eq:gray-step} reads
+\begin{equation}\label{eq:parent-step}
+ h_{w+1}=h_w\xor \e{d_w}.
+\end{equation}
+
+\subsection{Entry and exit corners inside each child cube}
+For each \(w\), choose an entry corner \(\ell^{\mathrm{in}}_w\in V_k\) and an exit axis \(a_w\in\{0,\dots,k-1\}\).
+Define the exit corner
+\begin{equation}\label{eq:child-exit}
+\ell^{\mathrm{out}}_w \coloneqq \ell^{\mathrm{in}}_w \xor \e{a_w}.
+\end{equation}
+Intuitively, the child traversal in cube \(h_w\) is an oriented copy of a fixed Gray-code Hamilton path on \(Q_k\) whose endpoints are \(\ell^{\mathrm{in}}_w\) and \(\ell^{\mathrm{out}}_w\).
+
+\subsection{The gluing constraint}
+Crossing from cube \(h_w\) to cube \(h_{w+1}=h_w\xor\e{d_w}\) happens across the shared face in axis \(d_w\).
+In \((h,\ell)\)-coordinates, the unique lattice adjacency across that face flips both the high and low bits in axis \(d_w\).
+Therefore, lattice continuity across the seam forces
+\begin{equation}\label{eq:seam}
+(h_{w+1},\ell^{\mathrm{in}}_{w+1}) = (h_w\xor\e{d_w},\;\ell^{\mathrm{out}}_w\xor\e{d_w}).
+\end{equation}
+Equivalently, in low-bit coordinates:
+\begin{equation}\label{eq:glue-low}
+\ell^{\mathrm{in}}_{w+1} = \ell^{\mathrm{in}}_w \xor \e{a_w} \xor \e{d_w}.
+\end{equation}
+
+\begin{lemma}[Mismatch-state form]\label{lem:mismatch}
+Define the \emph{mismatch state} \(s_w\in V_k\) by
+\begin{equation}\label{eq:mismatch}
+ s_w \coloneqq h_w \xor \ell^{\mathrm{in}}_w.
+\end{equation}
+Then \eqref{eq:glue-low} is equivalent to the pair of constraints
+\begin{align}
+ s_{w+1} &= s_w \xor \e{a_w}, \label{eq:s-walk}\\
+ (s_{w+1})_{d_w} &= 1. \label{eq:s-face}
+\end{align}
+\end{lemma}
+
+\begin{proof}
+Using \eqref{eq:parent-step} and \eqref{eq:glue-low},
+\[
+\begin{aligned}
+ s_{w+1}
+ &= h_{w+1}\xor \ell^{\mathrm{in}}_{w+1}
+ = (h_w\xor\e{d_w}) \xor (\ell^{\mathrm{in}}_w\xor\e{a_w}\xor\e{d_w})
+ = (h_w\xor\ell^{\mathrm{in}}_w)\xor\e{a_w}
+ = s_w\xor\e{a_w},
+\end{aligned}
+\]
+which is \eqref{eq:s-walk}.
+For \eqref{eq:s-face}, note that \eqref{eq:seam} implies the seam vertex \((h_{w+1},\ell^{\mathrm{in}}_{w+1})\) lies on the shared face in axis \(d_w\), i.e. its low bit in axis \(d_w\) equals \(1-(h_{w+1})_{d_w}\).
+Equivalently,
+\((\ell^{\mathrm{in}}_{w+1})_{d_w} \xor (h_{w+1})_{d_w} = 1\), which is \((s_{w+1})_{d_w}=1\).
+\end{proof}
+
+Lemma \ref{lem:mismatch} reduces the two-level gluing problem to a constrained walk on the hypercube \(Q_k\): at step \(w\), choose any neighbor \(s_{w+1}\) of \(s_w\) such that coordinate \(d_w\) of \(s_{w+1}\) is \(1\).
+
+\subsection{Existence of a gluing solution}
+We impose the natural boundary conditions for the \(4^k\) traversal:
+\begin{equation}\label{eq:bc}
+\ell^{\mathrm{in}}_0=\zero
+\qquad\text{and}\qquad
+(h_{2^k-1},\ell^{\mathrm{out}}_{2^k-1})=(\e{0},\e{0}),
+\end{equation}
+which correspond to starting at \(\zero\in\mathcal{L}_k\) and ending at \((3,0,\dots,0)\).
+Since \(h_{2^k-1}=\Gray_k(2^k-1)=\e{0}\), the final condition is equivalent to \(\ell^{\mathrm{out}}_{2^k-1}=\e{0}\).
+
+\begin{theorem}[Two-level gluing always succeeds]\label{thm:exist}
+Let \(k\ge 2\) and let \(\Gray_k\) be any Gray code satisfying \(\Gray_k(0)=\zero\) and \(\Gray_k(2^k-1)=\e{0}\).
+Then there exist entry corners \(\ell^{\mathrm{in}}_w\in V_k\) and exit axes \(a_w\in\{0,\dots,k-1\}\) such that:
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+\item \eqref{eq:glue-low} holds for all \(w=0,\dots,2^k-2\) (lattice-continuous seams),
+\item the boundary conditions \eqref{eq:bc} hold (start at \(\zero\), end at \((3,0,\dots,0)\)).
+\end{enumerate}
+Equivalently, there exists a mismatch sequence \(s_0,\dots,s_{2^k-1}\in V_k\) with \(s_0=\zero\) satisfying \eqref{eq:s-walk}--\eqref{eq:s-face} and \(\wt(s_{2^k-1})=1\).
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+We construct the mismatch states \(s_w\) directly.
+Let \(m\coloneqq 2^k-1\) and let \(j\coloneqq d_{m-1}=\stepaxis_k(m-1)\) be the last parent step axis.
+
+\emph{Phase A (reach all ones).}
+Starting from \(s_0=\zero\), for \(w=0,\dots,k-1\) choose \(s_{w+1}\) to be a neighbor of \(s_w\) that sets the required bit \(d_w\) to \(1\); this is always possible because either \((s_w)_{d_w}=0\) (flip it) or \((s_w)_{d_w}=1\) (flip some other zero bit).
+After \(k\) steps we reach \(s_k=(1,\dots,1)\).
+
+\emph{Phase B (idle).}
+The remaining number of steps before the last \(k-1\) constraints is even.
+From \(s=(1,\dots,1)\), we may consume two constraints at a time by flipping a non-required bit and flipping it back; this preserves \((s_{w+1})_{d_w}=1\) because the required bit stays \(1\).
+
+\emph{Phase C (end at a unit vector).}
+In the last \(k-1\) steps, starting again from \(s=(1,\dots,1)\), we flip to \(0\) any bit that will not be required again in the remaining suffix of \(d_w\)'s.
+This is always possible and ends at \(s_m=\e{j}\), hence \(\wt(s_m)=1\).
+
+Finally, recover \(\ell^{\mathrm{in}}_w\) and \(a_w\) by \eqref{eq:mismatch} and \eqref{eq:s-walk}.
+A full detailed invariant check is straightforward.
+\end{proof}
+
+\section{Computing orientation tables in \(\mathbb{F}_2^k\)}\label{sec:tables}
+
+Theorem \ref{thm:exist} implies that the two-level gluing constraints always have solutions.
+This section presents a practical method to compute one solution \((\ell^{\mathrm{in}}_w,a_w)\) for a given parent Gray code.
+
+\subsection{From exit-to-exit search to mismatch-state DP}
+One direct approach (used in a straightforward implementation) is to build a directed graph on the \(4^k\) lattice vertices and search a path from the global start to the global end while restricting the walk to enter each child cube at most once.
+A common optimization is to contract each child cube traversal to a single ``internal hop'' from the cube's entry corner to its exit corner, and to search only between exit vertices.
+
+Lemma \ref{lem:mismatch} shows that this entire search can be performed in \(V_k\): the only state that matters for gluing is \(s_w=h_w\xor \ell^{\mathrm{in}}_w\), and \eqref{eq:s-walk}--\eqref{eq:s-face} define allowed transitions.
+
+\subsection{A layered dynamic program}
+Let \(N\coloneqq 2^k\) and let \(d_0,\dots,d_{N-2}\) be the parent step axes.
+We construct a layered directed graph whose layer \(w\) consists of all mismatch states \(s\in V_k\).
+From state \(s\) in layer \(w\), we may transition to \(s'\) in layer \(w+1\) if
+\(\wt(s\xor s')=1\) and \((s')_{d_w}=1\).
+
+\begin{algorithm}
+\caption{Two-level orientation tables via mismatch-state DP in \(\V{k}\)}
+\label{alg:table-dp}
+\begin{algorithmic}[1]
+\Require Dimension \(k\ge 2\); parent Gray code \(\Gray_k\) with \(\Gray_k(0)=\zero\) and \(\Gray_k(N-1)=\e{0}\)
+\Ensure Tables \(\mathrm{entry}[w]\in V_k\) and \(\mathrm{dir}[w]\in\{0,\dots,k-1\}\) for \(w=0,\dots,N-1\)
+\State \(N\gets 2^k\)
+\For{\(w\gets 0\) \textbf{to} \(N-2\)}
+  \State \(d_w\gets \stepaxis_k(w)\)\Comment{from \eqref{eq:gray-step}}
+\EndFor
+\State Initialize reachable set \(R_0\gets\{\zero\}\;\) and predecessor table \(\pi\gets\bot\)
+\For{\(w\gets 0\) \textbf{to} \(N-2\)}
+  \State \(R_{w+1}\gets\emptyset\)
+  \ForAll{\(s\in R_w\)}
+    \For{\(a\gets 0\) \textbf{to} \(k-1\)}
+      \State \(s'\gets s\xor \e{a}\)
+      \If{\((s')_{d_w}=1\) \textbf{and} \(s'\notin R_{w+1}\)}
+        \State Add \(s'\) to \(R_{w+1}\); set \(\pi(w+1,s')\gets (s,a)\)
+      \EndIf
+    \EndFor
+  \EndFor
+\EndFor
+\State Choose any \(s_{N-1}\in R_{N-1}\) with \(\wt(s_{N-1})=1\)
+\State Backtrack using \(\pi\) to recover \(s_0,\dots,s_{N-1}\) and axes \(a_0,\dots,a_{N-2}\)
+\For{\(w\gets 0\) \textbf{to} \(N-1\)}
+  \State \(h_w\gets \Gray_k(w)\)
+  \State \(\mathrm{entry}[w]\gets h_w\xor s_w\)\Comment{\(\ell^{\mathrm{in}}_w\) via \eqref{eq:mismatch}}
+\EndFor
+\For{\(w\gets 0\) \textbf{to} \(N-2\)}
+  \State \(\mathrm{dir}[w]\gets a_w\)
+\EndFor
+\State \(\mathrm{dir}[N-1]\gets\) index of the unique 1-bit of \(s_{N-1}\)\Comment{final cube ends at \(\e{0}\)}
+\State \Return \((\mathrm{entry},\mathrm{dir})\)
+\end{algorithmic}
+\end{algorithm}
+
+\begin{proposition}[Correctness of Algorithm~\ref{alg:table-dp}]
+Algorithm~\ref{alg:table-dp} returns tables \(\mathrm{entry},\mathrm{dir}\) that satisfy the two-level gluing constraints \eqref{eq:glue-low} and the boundary conditions \eqref{eq:bc}.
+\end{proposition}
+
+\begin{proof}
+By construction, backtracking yields a mismatch sequence \(s_0,\dots,s_{N-1}\) and axes \(a_0,\dots,a_{N-2}\) that satisfy \eqref{eq:s-walk}--\eqref{eq:s-face}.
+Define \(\ell^{\mathrm{in}}_w\coloneqq \Gray_k(w)\xor s_w\) and \(a_w\coloneqq\mathrm{dir}[w]\).
+Lemma \ref{lem:mismatch} implies \eqref{eq:glue-low}.
+The initialization \(s_0=\zero\) gives \(\ell^{\mathrm{in}}_0=\zero\).
+Finally, \(\wt(s_{N-1})=1\) implies \(\ell^{\mathrm{out}}_{N-1}=\e{0}\), which matches \eqref{eq:bc}.
+\end{proof}
+
+\begin{remark}[Existence]
+Theorem \ref{thm:exist} guarantees that Algorithm~\ref{alg:table-dp} will always find at least one terminal \(s_{N-1}\) with \(\wt(s_{N-1})=1\), i.e. the DP never fails for \(k\ge 2\).
+\end{remark}
+
+\section{Recursive indexing for equal side lengths}\label{sec:equal}
+
+We now lift the two-level orientation tables to an order-\(m\) Hilbert-type index on the cube \(\{0,\dots,2^m-1\}^n\).
+The presentation is in \(\mathbb{F}_2^n\); implementation details about packing bit-planes are deferred to \S\ref{sec:impl}.
+
+Fix a dimension \(n\) and a Gray code \(\Gray_n\) with inverse \(\Rank_n\).
+Assume we have precomputed orientation tables \(\mathrm{entry}_n[w]\in V_n\) and \(\mathrm{dir}_n[w]\in\{0,\dots,n-1\}\) by Algorithm~\ref{alg:table-dp}.
+
+\subsection{Affine-state formulation}
+It is convenient to represent the evolving orientation as an affine automorphism
+\begin{equation}\label{eq:state-affine}
+A(x)=P x\xor a\qquad (x\in V_n),
+\end{equation}
+where \(P\) is a coordinate permutation matrix and \(a\in V_n\).
+Intuitively, \(A\) converts canonical bit-vectors (Gray-code coordinates) to the current oriented coordinates.
+
+For each child index \(w\in\{0,\dots,2^n-1\}\), choose an affine automorphism \(U_w\) such that
+\begin{equation}\label{eq:Uw-endpoints}
+U_w(\zero)=\mathrm{entry}_n[w],
+\qquad
+U_w(\e{0})=\mathrm{entry}_n[w]\xor \e{\mathrm{dir}_n[w]}.
+\end{equation}
+(For instance, one may take \(U_w=\T_{\mathrm{entry}_n[w],\mathrm{dir}_n[w]}\) from \eqref{eq:affine-T}.)
+
+\paragraph{State update.}
+If the current state at level \(s\) is \(A_s\), then after descending into child \(w\) the next state is
+\begin{equation}\label{eq:state-update}
+A_{s-1} \coloneqq A_s\circ U_w.
+\end{equation}
+This is the clean algebraic form of the standard Hilbert state update; \S\ref{sec:impl} explains how \eqref{eq:state-update} is represented with a small number of machine-word operations.
+
+\subsection{Encoding and decoding via bit-planes}
+Let \(p\in\{0,\dots,2^m-1\}^n\).
+For each level \(s\in\{m,m-1,\dots,1\}\), define the level-\(s\) bit-plane vector \(\ell_s(p)\in V_n\) by
+\begin{equation}\label{eq:bitplane}
+(\ell_s(p))_j \coloneqq \text{the }(s-1)\text{-th bit of }p_j.
+\end{equation}
+
+\paragraph{Encode.}
+Initialize \(A_m\) to the identity on \(V_n\).
+At level \(s\), map the bit-plane \(\ell_s(p)\) into canonical coordinates and rank it:
+\begin{equation}\label{eq:encode-digit}
+ w_s \coloneqq \Rank_n\bigl(A_s^{-1}(\ell_s(p))\bigr).
+\end{equation}
+Then update \(A_{s-1}\gets A_s\circ U_{w_s}\).
+The final index is the mixed-radix concatenation
+\(
+H(p)=w_m w_{m-1}\cdots w_1\in\{0,\dots,2^{mn}-1\}
+\)
+(where each digit \(w_s\) is in base \(2^n\)).
+
+\paragraph{Decode.}
+Conversely, given \(h\in\{0,\dots,2^{mn}-1\}\) with digits \(w_m,\dots,w_1\) in base \(2^n\), reconstruct level bit-planes by
+\begin{equation}\label{eq:decode-bitplane}
+\ell_s(p) \coloneqq A_s\bigl(\Gray_n(w_s)\bigr),
+\end{equation}
+then update \(A_{s-1}\gets A_s\circ U_{w_s}\) as before.
+Finally, assemble coordinates \(p_j\) from their bits \((\ell_s(p))_j\).
+
+\begin{theorem}[Correctness for equal side lengths]\label{thm:equal-correct}
+The procedures \eqref{eq:encode-digit}--\eqref{eq:decode-bitplane} define mutually inverse bijections
+\(
+H:\{0,\dots,2^m-1\}^n\leftrightarrow \{0,\dots,2^{mn}-1\}
+\)
+whose traversal is lattice-continuous.
+\end{theorem}
+
+\begin{proof}[Proof idea]
+At each level, \(A_s\) is an affine hypercube automorphism, hence adjacency-preserving.
+The digit \(w_s\) selects the unique child cube containing \(p\) at that level.
+Within a child cube, the traversal is an oriented copy of a Gray-code Hamilton path, hence adjacent.
+Across child boundaries, the tables \((\mathrm{entry}_n,\mathrm{dir}_n)\) satisfy the two-level gluing constraint, which ensures the seam step is a unit lattice step.
+Induction on levels yields a Hamiltonian path on the \(2^m\)-grid.
+\end{proof}
+
+\section{Unequal side lengths by axis activation}\label{sec:embedding}
+
+Compact Hilbert indices for unequal side lengths \cite{hamilton2008compact} exploit the fact that at coarse levels, axes with small extent contribute no bits.
+We adopt the same principle but maintain lattice continuity by embedding the gluing construction consistently as new axes become active.
+
+\subsection{Active subspaces in \(\mathbb{F}_2^n\)}
+Fix \(\mathbf{m}=(m_0,\dots,m_{n-1})\) and let \(m_{\max}\coloneqq\max_j m_j\).
+For each level \(s\in\{1,\dots,m_{\max}\}\), define the active axis set
+\[
+A_s \coloneqq \{j\in\{0,\dots,n-1\}: m_j\ge s\},
+\qquad
+k_s\coloneqq |A_s|.
+\]
+Let \(U_s\subseteq V_n\) be the coordinate subspace spanned by \(\{\e{j}:j\in A_s\}\); then \(U_s\cong\V{k_s}\).
+
+Define linear maps (projection to active coordinates and injection back into \(V_n\)):
+\[
+\pi_s:V_n\to\V{k_s},\qquad (\pi_s(x))_t \coloneqq x_{A_s[t]},
+\]
+\[
+\iota_s:\V{k_s}\to V_n,\qquad (\iota_s(u))_{A_s[t]}\coloneqq u_t\text{ and } (\iota_s(u))_j\coloneqq 0\text{ for }j\notin A_s.
+\]
+Then \(\iota_s\pi_s\) is the linear projector \(V_n\to U_s\).
+
+\subsection{Compatible Gray-code families}
+To recurse across changing \(k_s\), we assume a family of Gray codes \(\{\Gray_k\}_{k=1}^n\) that is compatible with axis activation.
+One sufficient condition is:
+
+\begin{definition}[Embedding compatibility]\label{def:compatible}
+A family \(\{\Gray_k\}\) is \emph{embedding-compatible} if for every \(k<k'\) there exists an injection \(\jmath:\V{k}\to\V{k'}\) (inserting zeros in new coordinates) such that
+\[
+\jmath(\Gray_k(w)) = \Gray_{k'}(w)\qquad\text{for all }w\in\{0,\dots,2^k-1\}.
+\]
+\end{definition}
+
+The binary reflected Gray code satisfies this property, as do standard inductive Gray-code constructions.
+
+\subsection{Embedding orientation tables}
+At a level \(s\) with \(k_s=k\), we use the Gray code \(\Gray_k\) on \(\V{k}\) and compute tables \((\mathrm{entry}_k,\mathrm{dir}_k)\) by Algorithm~\ref{alg:table-dp}.
+To interpret these tables in \(V_n\), lift each entry vector by \(\iota_s\), and interpret each exit axis as the corresponding physical axis in \(A_s\).
+
+When the active set grows from \(A_s\) to \(A_{s-1}\) (so \(k_{s-1}=k_s+\delta\)), the natural embedding of states is: act as before on the old coordinates and as identity on the newly activated coordinates.
+Algebraically, if \(A_s: \V{k_s}\to\V{k_s}\) is the current affine state in active coordinates, define the embedded state on \(\V{k_{s-1}}\) by
+\[
+\widetilde{A}_s(u\oplus v) \coloneqq A_s(u)\oplus v,
+\qquad u\in\V{k_s},\ v\in\V{\delta}.
+\]
+
+\begin{theorem}[Embedding preserves gluing]\label{thm:embed-glue}
+Assume \(\{\Gray_k\}\) is embedding-compatible.
+Let \((\mathrm{entry}_k,\mathrm{dir}_k)\) be any solution of the two-level gluing constraints for \(\Gray_k\).
+Then extending \(\mathrm{entry}_k\) by zeros in new coordinates and keeping exit directions on the original axes yields a valid solution of the two-level gluing constraints for the embedded Gray code in dimension \(k+\delta\).
+\end{theorem}
+
+\begin{proof}
+The two-level gluing constraints are equations in \(\mathbb{F}_2\) involving only XOR, unit vectors, and Gray steps.
+Embedding by inserting \(\delta\) leading zero coordinates is a linear injection \(\jmath\) that commutes with XOR and maps unit vectors in the old coordinates to unit vectors in the embedded coordinates.
+By compatibility, Gray steps are preserved under \(\jmath\).
+Therefore the constraint equations remain true after embedding.
+\end{proof}
+
+\begin{theorem}[Correctness for unequal side lengths]\label{thm:unequal}
+Fix \(\mathbf{m}\in\mathbb{N}^n\) and assume an embedding-compatible Gray family \(\{\Gray_k\}\).
+Let \((\mathrm{entry}_{k_s},\mathrm{dir}_{k_s})\) be orientation tables for each active dimension \(k_s\) obtained from Algorithm~\ref{alg:table-dp} and embedded across activation as in Theorem~\ref{thm:embed-glue}.
+Then the resulting recursive encoder/decoder defines a lattice-continuous bijection on \(\mathcal{D}(\mathbf{m})\).
+\end{theorem}
+
+\begin{proof}[Proof idea]
+The argument follows Theorem~\ref{thm:equal-correct} level by level.
+At level \(s\), only axes in \(A_s\) change; inactive axes contribute zero bits and remain fixed.
+Within the active subspace, we traverse oriented Gray-code children and use the gluing constraint to cross seams.
+When new axes become active, Theorem~\ref{thm:embed-glue} ensures the gluing equations remain valid in the larger active subspace.
+Thus consecutive indices are adjacent in the full grid graph on \(\mathcal{D}(\mathbf{m})\).
+\end{proof}
+
+\section{Algorithms and implementation order}\label{sec:impl}
+
+The mathematical development above uses bit-plane vectors \(\ell_s(p)\in\V{k_s}\) (or in \(V_n\) with inactive coordinates forced to zero).
+In an implementation, these vectors are packed into machine words.
+This section states the encode/decode algorithms in a way that makes the dependence on \(\mathbb{F}_2\) operations explicit.
+
+\subsection{Packed bit-planes}
+Fix an ordering of active axes in each \(A_s\), written as a list \(A_s[0],\dots,A_s[k_s-1]\).
+Given \(p\in\mathcal{D}(\mathbf{m})\), define the packed level-\(s\) bit-plane \(\ell_s\in\V{k_s}\) by
+\[
+(\ell_s)_t \coloneqq \text{bit}_{s-1}(p_{A_s[t]}).
+\]
+Similarly, decode reconstructs these bits and scatters them back to the corresponding physical coordinates.
+
+\subsection{State representation}
+In \S\ref{sec:equal} we represented the orientation state as an affine map \(A(x)=Px\xor a\).
+A compact implementation chooses a restricted family of permutations (e.g. cyclic rotations as in \eqref{eq:affine-T}) so that composition and inversion can be updated with \(O(1)\) word operations.
+
+\subsection{Encode and decode pseudocode}
+
+\begin{algorithm}
+\caption{Encode: point \(p\in\mathcal{D}(\mathbf{m})\) to Hilbert index \(H(p)\)}
+\label{alg:encode}
+\begin{algorithmic}[1]
+\Require Point \(p\in\mathcal{D}(\mathbf{m})\); active sets \(A_s\); Gray codes \(\Gray_{k_s}\) and ranks \(\Rank_{k_s}\); tables \((\mathrm{entry}_{k_s},\mathrm{dir}_{k_s})\)
+\Ensure Index \(h\in\{0,\dots,2^M-1\}\)
+\State Initialize affine state \(A\) to the identity on \(\V{k_{m_{\max}}}\)
+\State \(h\gets 0\)
+\For{\(s\gets m_{\max}\) \textbf{down to} \(1\)}
+  \State \(k\gets k_s\)
+  \State Pack \(\ell\in\V{k}\) from \(p\) at bit-plane \(s-1\) over axes \(A_s\)
+  \State \(w\gets \Rank_k\bigl(A^{-1}(\ell)\bigr)\)
+  \State Append digit \(w\) to \(h\) in base \(2^k\)
+  \State Choose \(U_w\) satisfying \eqref{eq:Uw-endpoints} for dimension \(k\)
+  \State \(A\gets A\circ U_w\)
+  \If{\(k_{s-1}>k_s\)}
+    \State Embed \(A\) to act as identity on newly activated coordinates (\S\ref{sec:embedding})
+  \EndIf
+\EndFor
+\State \Return \(h\)
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}
+\caption{Decode: Hilbert index \(h\) to point \(p\in\mathcal{D}(\mathbf{m})\)}
+\label{alg:decode}
+\begin{algorithmic}[1]
+\Require Index \(h\in\{0,\dots,2^M-1\}\); active sets \(A_s\); Gray codes \(\Gray_{k_s}\); tables \((\mathrm{entry}_{k_s},\mathrm{dir}_{k_s})\)
+\Ensure Point \(p\in\mathcal{D}(\mathbf{m})\)
+\State Extract mixed-radix digits \(w_s\in\{0,\dots,2^{k_s}-1\}\) for \(s=m_{\max},\dots,1\)
+\State Initialize affine state \(A\) to the identity on \(\V{k_{m_{\max}}}\)
+\State Initialize \(p\gets (0,\dots,0)\)
+\For{\(s\gets m_{\max}\) \textbf{down to} \(1\)}
+  \State \(k\gets k_s\)
+  \State \(\ell\gets A\bigl(\Gray_k(w_s)\bigr)\)
+  \State Scatter bits of \(\ell\) into \(p\) at bit-plane \(s-1\) on axes \(A_s\)
+  \State Choose \(U_{w_s}\) satisfying \eqref{eq:Uw-endpoints} for dimension \(k\)
+  \State \(A\gets A\circ U_{w_s}\)
+  \If{\(k_{s-1}>k_s\)}
+    \State Embed \(A\) to act as identity on newly activated coordinates
+  \EndIf
+\EndFor
+\State \Return \(p\)
+\end{algorithmic}
+\end{algorithm}
+% Requires:
+% \usepackage{algorithm}
+% \usepackage{algpseudocode} % provides the algorithmic environment used below
+
+\begin{algorithm}
+\caption{Decode all Hilbert indices by maintaining a per-level affine-state stack}
+\label{alg:decode-all-stack}
+\begin{algorithmic}[1]
+\Require Extents $\mathbf m=(m_0,\dots,m_{n-1})$, $M=\sum_j m_j$
+\Require Active-axis lists $A_s[0..k_s-1]$ and counts $k_s$ for levels $s=1,\dots,L$ where $L=m_{\max}$
+\Require Gray code vertex map $\Gray_k(w)$ (e.g. BRGC-with-exit-at-axis-0) for each $k$
+\Require Child-orientation update data for each $k$ (e.g. $\mathrm{entry}_k[w]$, $\mathrm{dir}_k[w]$ or the functions \texttt{child\_entry}, \texttt{child\_dir})
+\Require Affine apply $\mathrm{Apply}(x,e,d,k)=\rot^d(x)\xor e$ on $k$ bits (as in \texttt{affine\_apply})
+\Ensure Emits points $p(t)=H^{-1}(t)$ for all $t\in\{0,\dots,2^M-1\}$ in increasing index order
+
+\State $L\gets m_{\max}$
+\State Initialize mixed-radix digits $w[1..L]\gets 0$ \Comment{$w_s\in\{0,\dots,2^{k_s}-1\}$, with $s=1$ least-significant}
+\State Initialize affine-state stack $(e[L],d[L])\gets (0,0)$ \Comment{identity at the top level}
+\State Initialize cached planes $\pi[1..L]\gets 0$ and point $p\gets (0,\dots,0)$
+
+\State \Call{RecomputeSuffix}{$L,w,\pi,e,d,p$} \Comment{build full stack + point for index $0$}
+\State \Call{Emit}{$p$}
+
+\While{\textbf{true}}
+  \State $s_0 \gets$ \Call{IncMixedRadix}{$w,k,L$} \Comment{carry climbs; returns first level where carry stops}
+  \If{$s_0=L+1$}
+    \State \textbf{break} \Comment{overflow $\Rightarrow$ enumerated all $2^M$ indices}
+  \EndIf
+  \State \Call{RecomputeSuffix}{$s_0,w,\pi,e,d,p$} \Comment{pop levels $<s_0$ and push recomputed affine states}
+  \State \Call{Emit}{$p$}
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}
+\caption{Subroutines for Algorithm~\ref{alg:decode-all-stack}}
+\label{alg:decode-all-stack-sub}
+\begin{algorithmic}[1]
+\Function{IncMixedRadix}{$w,k,L$}
+  \State $s\gets 1$
+  \While{$s\le L$ \textbf{and} $w[s]=2^{k_s}-1$}
+    \State $w[s]\gets 0$; $s\gets s+1$ \Comment{carry pops one level}
+  \EndWhile
+  \If{$s=L+1$} \State \Return $L+1$ \EndIf
+  \State $w[s]\gets w[s]+1$
+  \State \Return $s$
+\EndFunction
+
+\Function{RecomputeSuffix}{$s_0,w,\pi,e,d,p$}
+  \For{$s\gets s_0$ \textbf{down to} $1$}
+    \State $k\gets k_s$
+    \State $g \gets \Gray_k(w[s])$
+    \State $\pi_{\mathrm{new}} \gets \mathrm{Apply}(g,\,e[s],\,d[s],\,k)$
+    \State $\Delta \gets \pi_{\mathrm{new}} \xor \pi[s]$
+    \For{$t\gets 0$ \textbf{to} $k-1$}
+      \If{$((\Delta \gg t)\,\&\,1)=1$}
+        \State $p_{A_s[t]} \gets p_{A_s[t]} \xor 2^{\,s-1}$ \Comment{toggle bit-plane $(s-1)$}
+      \EndIf
+    \EndFor
+    \State $\pi[s]\gets \pi_{\mathrm{new}}$
+    \State $(e[s-1],d[s-1])\gets$ \Call{UpdateState}{$(e[s],d[s]),\,w[s],\,k_s,\,k_{s-1}$}
+  \EndFor
+\EndFunction
+
+\Function{UpdateState}{$(e,d),w,k,k_{\mathrm{next}}$}
+  \State $e_c\gets \mathrm{entry}_k[w]$,\quad $d_c\gets \mathrm{dir}_k[w]$
+  \Comment{(in \texttt{hilbert\_affine.c}: $e_c=\texttt{child\_entry}(w,k)$ and $d_c=\texttt{child\_dir}(w,k)$)}
+  \State $e'\gets \mathrm{Apply}(e_c,\,e,\,d,\,k)$
+  \State $d'\gets (d+d_c)\bmod k$
+  \If{$k_{\mathrm{next}}>k$} \Comment{axis-activation embedding; matches the left-shift in \texttt{hilbert\_affine.c}}
+    \State $\delta\gets k_{\mathrm{next}}-k$
+    \State $e'\gets e'\ll \delta$;\quad $d'\gets d'+\delta$
+  \EndIf
+  \State \Return $(e',d')$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Order for decoding the whole domain.}
+Let $N=2^M$ be the number of lattice points. A direct decode (Algorithm~\ref{alg:decode} in the paper)
+processes every level and scatters $k_s$ bits at level $s$, so the per-point work is
+$\Theta\!\left(\sum_{s=1}^{L} k_s\right)=\Theta(M)$ and decoding the full domain is $\Theta(NM)$.
+
+In Algorithm~\ref{alg:decode-all-stack}, the index is kept as mixed-radix digits with bases
+$b_s=2^{k_s}$. When the index increments, only a suffix of digits changes (the usual carry behavior).
+Level $s$ is recomputed only when all lower digits overflow, which occurs exactly
+$N/\prod_{i=1}^{s-1} b_i$ times over the full enumeration.
+Recomputing a level costs $\Theta(k_s)$ for the coordinate-bit toggles plus $O(1)$ affine/Gray work.
+Therefore the total work is
+\[
+T \;=\; \Theta(M)\;+\;\sum_{s=1}^{L} \Theta(k_s)\;\frac{N}{\prod_{i=1}^{s-1} 2^{k_i}}.
+\]
+Since $b_i\ge 2$ for all $i$, we have $\prod_{i=1}^{s-1}2^{k_i}\ge 2^{s-1}$, and with
+$k_{\max}=\max_s k_s\le n$,
+\[
+T \;\le\; N\,k_{\max}\sum_{s\ge 1}2^{-(s-1)} + O(M) \;=\; O(N\,k_{\max}) \;=\; O(2^M\,n).
+\]
+So the amortized work per decoded point is $O(n)$, improving whole-domain conversion from
+$O(2^M M)$ (decode each index independently) to $O(2^M n)$ using the affine-state stack.
+
+\subsection{Complexity}
+For each level \(s\), encoding/decoding performs \(O(k_s)\le O(n)\) bit extractions/scatters plus \(O(1)\) updates of the affine state representation.
+Thus the total complexity is \(O(m_{\max} n)\) bit operations.
+Table generation by Algorithm~\ref{alg:table-dp} runs in \(O(k\,2^k\,2^k)=O(k\,4^k)\) time and \(O(4^k)\) space for each active dimension \(k\le n\), which is a one-time precomputation.
+
+\section*{Experimental validation (omitted in this draft)}
+The experimental section (locality metrics, bounding-box quality, and comparisons to existing CHIs) depends on measurement data that will be inserted in a later revision.
+
+\section{Conclusion}
+We reformulated two-level Hilbert gluing constraints as a constrained walk problem in \(\mathbb{F}_2^k\), yielding a compact DP that constructs valid child-orientation tables for arbitrary parent Gray codes.
+Using an affine-state recursion and an axis-activation embedding framework, these tables lift to lattice-continuous compact Hilbert indices for dyadic hyperrectangles with unequal side lengths.
+
+\bibliographystyle{plain}
+\bibliography{article}
+
+\end{document}
