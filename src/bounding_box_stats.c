@@ -222,7 +222,6 @@ static block_bbox_stats_t compute_block_stats(const bbox_curve_points_t *curve, 
         uint64_t start = (uint64_t)blk * B;
         uint64_t end = start + B;
         if (end > N) end = N;
-        uint64_t block_len = end - start;
 
         /* Initialize bounding box with first point in block */
         const uint32_t *p0 = bbox_curve_point_at(curve, start);
@@ -331,8 +330,11 @@ static const domain_config_t domains[] = {
 
 #define N_DOMAINS (sizeof(domains) / sizeof(domains[0]))
 
-/* Block sizes to test (typical R-tree leaf sizes) */
-static const int block_sizes[] = {32, 64, 128, 256, 512, 1024};
+/* Block sizes to test:
+ * - Power-of-2 sizes: align with Hilbert recursive structure
+ * - Non-power-of-2 sizes: straddle recursive boundaries, reveal discontinuities
+ */
+static const int block_sizes[] = {32, 33, 64, 100, 128, 256, 500, 512, 1024};
 #define N_BLOCK_SIZES (sizeof(block_sizes) / sizeof(block_sizes[0]))
 
 static const char *HDF5_FILE = "hilbert_tables.h5";
@@ -351,7 +353,7 @@ static void run_curve_variant(FILE *csv_fp, const char *curve_name,
 
 static void run_domain(FILE *csv_fp, const domain_config_t *domain)
 {
-    int m_array[HAVERKORT_MAX_DIMS] = {0};
+    int m_array[BBOX_MAX_DIMS] = {0};
     for (int i = 0; i < domain->n; i++) {
         m_array[i] = domain->m[i];
     }
@@ -362,14 +364,14 @@ static void run_domain(FILE *csv_fp, const domain_config_t *domain)
     /* Hamilton-CHI */
     {
         fprintf(stderr, "Computing Hamilton-CHI...\n");
-        curve_points_t curve = {0};
-        if (curve_points_alloc(&curve, hamilton_decode_wrapper, m_array, domain->n) != 0) {
+        bbox_curve_points_t curve = {0};
+        if (bbox_curve_points_alloc(&curve, hamilton_decode_wrapper, m_array, domain->n) != 0) {
             fprintf(stderr, "  ERROR: Failed to allocate curve points\n");
             return;
         }
 
         run_curve_variant(csv_fp, "Hamilton-CHI", &curve, m_array, domain->n);
-        curve_points_free(&curve);
+        bbox_curve_points_free(&curve);
     }
 
     /* LC-CHI-BRGC */
@@ -378,12 +380,12 @@ static void run_domain(FILE *csv_fp, const domain_config_t *domain)
         if (hilbert_tables_init(HDF5_FILE, "brgc", 0) != 0) {
             fprintf(stderr, "  ERROR: Failed to load BRGC tables from %s\n", HDF5_FILE);
         } else {
-            curve_points_t curve = {0};
-            if (curve_points_alloc(&curve, lc_chi_decode_wrapper, m_array, domain->n) != 0) {
+            bbox_curve_points_t curve = {0};
+            if (bbox_curve_points_alloc(&curve, lc_chi_decode_wrapper, m_array, domain->n) != 0) {
                 fprintf(stderr, "  ERROR: Failed to allocate curve points\n");
             } else {
                 run_curve_variant(csv_fp, "LC-CHI-BRGC", &curve, m_array, domain->n);
-                curve_points_free(&curve);
+                bbox_curve_points_free(&curve);
             }
             hilbert_tables_cleanup();
         }
@@ -395,12 +397,12 @@ static void run_domain(FILE *csv_fp, const domain_config_t *domain)
         if (hilbert_tables_init(HDF5_FILE, "balanced", 0) != 0) {
             fprintf(stderr, "  SKIPPED: No balanced tables in %s\n", HDF5_FILE);
         } else {
-            curve_points_t curve = {0};
-            if (curve_points_alloc(&curve, lc_chi_decode_wrapper, m_array, domain->n) != 0) {
+            bbox_curve_points_t curve = {0};
+            if (bbox_curve_points_alloc(&curve, lc_chi_decode_wrapper, m_array, domain->n) != 0) {
                 fprintf(stderr, "  ERROR: Failed to allocate curve points\n");
             } else {
                 run_curve_variant(csv_fp, "LC-CHI-Balanced", &curve, m_array, domain->n);
-                curve_points_free(&curve);
+                bbox_curve_points_free(&curve);
             }
             hilbert_tables_cleanup();
         }
@@ -412,12 +414,12 @@ static void run_domain(FILE *csv_fp, const domain_config_t *domain)
         if (hilbert_tables_init(HDF5_FILE, "random", 0) != 0) {
             fprintf(stderr, "  SKIPPED: No random tables in %s\n", HDF5_FILE);
         } else {
-            curve_points_t curve = {0};
-            if (curve_points_alloc(&curve, lc_chi_decode_wrapper, m_array, domain->n) != 0) {
+            bbox_curve_points_t curve = {0};
+            if (bbox_curve_points_alloc(&curve, lc_chi_decode_wrapper, m_array, domain->n) != 0) {
                 fprintf(stderr, "  ERROR: Failed to allocate curve points\n");
             } else {
                 run_curve_variant(csv_fp, "LC-CHI-Random", &curve, m_array, domain->n);
-                curve_points_free(&curve);
+                bbox_curve_points_free(&curve);
             }
             hilbert_tables_cleanup();
         }
@@ -432,7 +434,7 @@ static void print_usage(const char *prog)
     fprintf(stderr, "  --output FILE    Write CSV to FILE (default: stdout)\n");
     fprintf(stderr, "  --hdf5 FILE      Use FILE for Hilbert tables (default: hilbert_tables.h5)\n");
     fprintf(stderr, "  --help           Show this help\n");
-    fprintf(stderr, "\nBlock sizes tested: 32, 64, 128, 256, 512, 1024\n");
+    fprintf(stderr, "\nBlock sizes tested: 32, 33, 64, 100, 128, 256, 500, 512, 1024\n");
     fprintf(stderr, "Domain configurations:\n");
     for (size_t i = 0; i < N_DOMAINS; i++) {
         fprintf(stderr, "  %s: m=(%d,%d) -> %llu points\n",
