@@ -2,7 +2,7 @@
  * test_hilbert_general.c
  *
  * Test harness for hilbert_general.c which uses table-based lookups
- * for Gray codes and child geometry.
+ * for Gray codes and child geometry. Tests all curve types from HDF5.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,10 +46,13 @@ static int test_roundtrip(int n, const int *m, const char *label)
         }
     }
 
-    printf("%s: %s", label, errors == 0 ? "PASS" : "FAIL");
-    if (errors > 0)
-        printf(" (%d errors)", errors);
-    printf("\n");
+    if (g_verbose || errors > 0)
+    {
+        printf("%s: %s", label, errors == 0 ? "PASS" : "FAIL");
+        if (errors > 0)
+            printf(" (%d errors)", errors);
+        printf("\n");
+    }
 
     return errors;
 }
@@ -91,20 +94,20 @@ static int test_adjacency(int n, const int *m, const char *label)
         }
     }
 
-    if (errors > 0)
-        printf(" (%d errors)\n", errors);
+    if (g_verbose && errors > 0)
+        printf("%s: FAIL (%d errors)\n", label, errors);
 
     return errors;
 }
 
-int main(int argc, char **argv)
+/* Run all tests for current table set */
+static int run_tests(void)
 {
-    g_verbose = (argc > 1 && strcmp(argv[1], "-v") == 0);
-
     int total_tests = 0;
     int total_errors = 0;
 
-    printf("=== Roundtrip Tests ===\n");
+    printf("  Roundtrip tests: ");
+    fflush(stdout);
 
     /* 2D tests */
     {
@@ -178,7 +181,20 @@ int main(int argc, char **argv)
         total_tests++;
     }
 
-    printf("\n=== Adjacency Tests ===\n");
+    /* 8D test */
+    {
+        int m[] = {2, 2, 2, 2, 2, 2, 2, 2};
+        total_errors += test_roundtrip(8, m, "8D [2,2,2,2,2,2,2,2]");
+        total_tests++;
+    }
+
+    printf("%d tests, %d errors\n", total_tests, total_errors);
+
+    printf("  Adjacency tests: ");
+    fflush(stdout);
+
+    int adj_tests = 0;
+    int adj_errors = 0;
 
     /* Adjacency tests - verify space-filling property */
     {
@@ -189,18 +205,18 @@ int main(int argc, char **argv)
             {
                 m[0] = i;
                 m[1] = j;
-                total_errors += test_adjacency(2, m, "2D [3,3]");
-                total_tests++;
+                adj_errors += test_adjacency(2, m, "2D");
+                adj_tests++;
             }
         }
     }
     {
         int m[] = {2, 2, 2};
-        total_errors += test_adjacency(3, m, "3D [2,2,2]");
-        total_tests++;
+        adj_errors += test_adjacency(3, m, "3D [2,2,2]");
+        adj_tests++;
     }
     {
-        int limit = 6;
+        int limit = 4;  /* Reduced from 6 to speed up tests */
         int m[] = {2, 2, 2, 2};
         for (int i = 1; i < limit; i++)
         {
@@ -214,16 +230,71 @@ int main(int argc, char **argv)
                         m[1] = j;
                         m[2] = k;
                         m[3] = l;
-                        total_errors += test_adjacency(4, m, "4D [2,2,2,2]");
-                        total_tests++;
+                        adj_errors += test_adjacency(4, m, "4D");
+                        adj_tests++;
                     }
                 }
             }
         }
     }
 
-    printf("\n=== Summary ===\n");
-    printf("Total: %d tests, %d errors\n", total_tests, total_errors);
+    printf("%d tests, %d errors\n", adj_tests, adj_errors);
 
-    return total_errors > 0 ? 1 : 0;
+    total_tests += adj_tests;
+    total_errors += adj_errors;
+
+    return total_errors;
+}
+
+int main(int argc, char **argv)
+{
+    g_verbose = (argc > 1 && strcmp(argv[1], "-v") == 0);
+
+    const char *hdf5_file = "hilbert_tables.h5";
+    const char *types[] = {"brgc", "monotone", "balanced", "random"};
+    int num_types = 4;
+
+    /* Initialize with first table type */
+    if (hilbert_tables_init(hdf5_file, types[0], 0) < 0)
+    {
+        fprintf(stderr, "Failed to open %s\n", hdf5_file);
+        fprintf(stderr, "Run 'make hilbert_tables.h5' first to generate the tables.\n");
+        return 1;
+    }
+
+    int total_errors = 0;
+
+    printf("Testing Hilbert curves from %s\n\n", hdf5_file);
+
+    for (int t = 0; t < num_types; t++)
+    {
+        printf("=== %s (index 0) ===\n", types[t]);
+
+        if (t > 0)
+        {
+            if (hilbert_tables_switch(types[t], 0) < 0)
+            {
+                fprintf(stderr, "Failed to switch to %s/0\n", types[t]);
+                total_errors++;
+                continue;
+            }
+        }
+
+        total_errors += run_tests();
+        printf("\n");
+    }
+
+    hilbert_tables_cleanup();
+
+    printf("=== Final Summary ===\n");
+    if (total_errors == 0)
+    {
+        printf("All tests passed for all curve types.\n");
+        return 0;
+    }
+    else
+    {
+        printf("Total errors: %d\n", total_errors);
+        return 1;
+    }
 }

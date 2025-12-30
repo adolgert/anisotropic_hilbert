@@ -18,7 +18,7 @@ enum class GrayCodeType {
 };
 
 // Main generation functions
-// k = dimension (2-7), returns vector of length 2^k
+// k = dimension (1-8), returns vector of length 2^k
 // gray[w] = vertex (bitmask) at position w in the path
 
 std::vector<u32> generate_brgc(int k);
