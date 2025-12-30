@@ -99,10 +99,10 @@ int hilbert_tables_select(hilbert_tables_ctx_t* ctx, const char* name, int index
  *
  * Returns 0 on error (no table selected, k out of range, etc.)
  */
-uint8_t hilbert_gray(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t w);
-uint8_t hilbert_gray_rank(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t g);
-uint8_t hilbert_child_entry(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t w);
-uint8_t hilbert_child_dir(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t w);
+uint8_t hilbert_gray_ctx(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t w);
+uint8_t hilbert_gray_rank_ctx(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t g);
+uint8_t hilbert_child_entry_ctx(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t w);
+uint8_t hilbert_child_dir_ctx(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t w);
 
 /* --------------------------------------------------------------------------
  * Storage API (for table generation)

@@ -56,7 +56,7 @@ static int verify_gray_code(hilbert_tables_ctx_t *ctx, int k)
 
     for (uint32_t w = 0; w < size; w++)
     {
-        uint8_t g = hilbert_gray(ctx, k, w);
+        uint8_t g = hilbert_gray_ctx(ctx, k, w);
         if (g >= size)
         {
             free(seen);
@@ -72,7 +72,7 @@ static int verify_gray_code(hilbert_tables_ctx_t *ctx, int k)
         /* Check Gray code property: consecutive elements differ by 1 bit */
         if (w > 0)
         {
-            uint8_t prev = hilbert_gray(ctx, k, w - 1);
+            uint8_t prev = hilbert_gray_ctx(ctx, k, w - 1);
             uint8_t diff = g ^ prev;
             /* diff should be a power of 2 */
             if (diff == 0 || (diff & (diff - 1)) != 0)
@@ -94,8 +94,8 @@ static int verify_gray_rank(hilbert_tables_ctx_t *ctx, int k)
 
     for (uint32_t w = 0; w < size; w++)
     {
-        uint8_t g = hilbert_gray(ctx, k, w);
-        uint8_t r = hilbert_gray_rank(ctx, k, g);
+        uint8_t g = hilbert_gray_ctx(ctx, k, w);
+        uint8_t r = hilbert_gray_rank_ctx(ctx, k, g);
         if (r != w)
             return 0;
     }
@@ -108,13 +108,13 @@ static int verify_child_geometry(hilbert_tables_ctx_t *ctx, int k)
     uint32_t size = 1u << k;
 
     /* Entry of first cube should be 0 */
-    if (hilbert_child_entry(ctx, k, 0) != 0)
+    if (hilbert_child_entry_ctx(ctx, k, 0) != 0)
         return 0;
 
     /* All child_dir values should be in [0, k-1] */
     for (uint32_t w = 0; w < size; w++)
     {
-        uint8_t dir = hilbert_child_dir(ctx, k, w);
+        uint8_t dir = hilbert_child_dir_ctx(ctx, k, w);
         if (dir >= (uint8_t)k)
             return 0;
     }
@@ -127,16 +127,16 @@ static int verify_child_geometry(hilbert_tables_ctx_t *ctx, int k)
     */
 
     /* Check s_0 = 0 */
-    uint8_t g0 = hilbert_gray(ctx, k, 0);
-    uint8_t e0 = hilbert_child_entry(ctx, k, 0);
+    uint8_t g0 = hilbert_gray_ctx(ctx, k, 0);
+    uint8_t e0 = hilbert_child_entry_ctx(ctx, k, 0);
     if ((g0 ^ e0) != 0)
         return 0;
 
     /* Check transition constraints */
     for (uint32_t w = 0; w + 1 < size; w++)
     {
-        uint8_t g_curr = hilbert_gray(ctx, k, w);
-        uint8_t g_next = hilbert_gray(ctx, k, w + 1);
+        uint8_t g_curr = hilbert_gray_ctx(ctx, k, w);
+        uint8_t g_next = hilbert_gray_ctx(ctx, k, w + 1);
         uint8_t diff = g_curr ^ g_next;
 
         /* diff should be a single bit */
@@ -149,14 +149,14 @@ static int verify_child_geometry(hilbert_tables_ctx_t *ctx, int k)
             d_w++;
 
         /* s_{w+1} should have bit d_w set */
-        uint8_t s_next = g_next ^ hilbert_child_entry(ctx, k, w + 1);
+        uint8_t s_next = g_next ^ hilbert_child_entry_ctx(ctx, k, w + 1);
         if (((s_next >> d_w) & 1) == 0)
             return 0;
     }
 
     /* Check s_{last} has Hamming weight 1 */
-    uint8_t g_last = hilbert_gray(ctx, k, size - 1);
-    uint8_t e_last = hilbert_child_entry(ctx, k, size - 1);
+    uint8_t g_last = hilbert_gray_ctx(ctx, k, size - 1);
+    uint8_t e_last = hilbert_child_entry_ctx(ctx, k, size - 1);
     uint8_t s_last = g_last ^ e_last;
     int popcount = 0;
     for (int b = 0; b < 8; b++)
@@ -224,11 +224,11 @@ int main(int argc, char *argv[])
             uint32_t size = 1u << k;
             for (uint32_t w = 0; w < size && is_std; w++)
             {
-                if (hilbert_gray(ctx, k, w) != brgc((uint8_t)w))
+                if (hilbert_gray_ctx(ctx, k, w) != brgc((uint8_t)w))
                     is_std = 0;
-                if (hilbert_child_entry(ctx, k, w) != child_entry_std(w))
+                if (hilbert_child_entry_ctx(ctx, k, w) != child_entry_std(w))
                     is_std = 0;
-                if (hilbert_child_dir(ctx, k, w) != child_dir_std(w, k))
+                if (hilbert_child_dir_ctx(ctx, k, w) != child_dir_std(w, k))
                     is_std = 0;
             }
             printf("OK (standard=%s)\n", is_std ? "yes" : "no");

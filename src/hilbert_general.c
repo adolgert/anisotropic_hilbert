@@ -24,7 +24,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "random_tables.h"
+#include "setup_hilbert.h"
 
 #define MAX_DIMS 32
 #define MAX_LEVELS 32
@@ -89,28 +89,28 @@ static inline uint32_t rotr_bits(uint32_t x, uint32_t r, uint32_t bits)
 /* Gray code with exit at axis 0 - table lookup version. */
 static inline uint32_t gray_code_axis0(uint32_t w, uint32_t k)
 {
-  assert(k >= 1 && k <= 7);
+  assert(k >= 1 && k <= 8);
   return (uint32_t)hilbert_gray(k, w);
 }
 
 /* Inverse of gray_code_axis0 - table lookup version. */
 static inline uint32_t gray_decode_axis0(uint32_t g, uint32_t k)
 {
-  assert(k >= 1 && k <= 7);
+  assert(k >= 1 && k <= 8);
   return (uint32_t)hilbert_gray_rank(k, g);
 }
 
 /* Child entry sequence - table lookup version. */
 static inline uint32_t child_entry(uint32_t w, uint32_t k)
 {
-  assert(k >= 1 && k <= 7);
+  assert(k >= 1 && k <= 8);
   return (uint32_t)hilbert_child_entry(k, w);
 }
 
 /* Child direction sequence - table lookup version. */
 static inline uint32_t child_dir(uint32_t w, uint32_t k)
 {
-  assert(k >= 1 && k <= 7);
+  assert(k >= 1 && k <= 8);
   return (uint32_t)hilbert_child_dir(k, w);
 }
 

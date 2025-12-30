@@ -387,28 +387,28 @@ static int ensure_loaded(hilbert_tables_ctx_t* ctx, uint32_t k)
     return 0;
 }
 
-uint8_t hilbert_gray(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t w)
+uint8_t hilbert_gray_ctx(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t w)
 {
     if (ensure_loaded(ctx, k) < 0) return 0;
     if (w >= (1u << k)) return 0;
     return ctx->gray[w];
 }
 
-uint8_t hilbert_gray_rank(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t g)
+uint8_t hilbert_gray_rank_ctx(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t g)
 {
     if (ensure_loaded(ctx, k) < 0) return 0;
     if (g >= (1u << k)) return 0;
     return ctx->gray_rank[g];
 }
 
-uint8_t hilbert_child_entry(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t w)
+uint8_t hilbert_child_entry_ctx(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t w)
 {
     if (ensure_loaded(ctx, k) < 0) return 0;
     if (w >= (1u << k)) return 0;
     return ctx->child_entry[w];
 }
 
-uint8_t hilbert_child_dir(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t w)
+uint8_t hilbert_child_dir_ctx(hilbert_tables_ctx_t* ctx, uint32_t k, uint32_t w)
 {
     if (ensure_loaded(ctx, k) < 0) return 0;
     if (w >= (1u << k)) return 0;

@@ -11,6 +11,7 @@
 *.out
 *.toc
 *.gz
+*.synctex(busy)
 article/article.pdf
 
 # compilation
@@ -53,3 +54,10 @@ comments/20251219b_refine_pi/refine_pi.pdf
 comments/20251219d_discrete_proof_elaborated/discrete_proof_elaborated.pdf
 comments/20251222a_gray_based.pdf
 comments/20251222a_gray_based_fixed.pdf
+comments/20251228e_article/article_clean.pdf
+comments/alber_niedermeier/alber_niedermeier_notes.pdf
+src/hilbert_tables.h5
+src/test_fast_tables_verify
+src/test_tables_hdf5
+src/generate_fast_tables
+comments/20251229d_article_no_cross_requirement/article_clean_revised.pdf

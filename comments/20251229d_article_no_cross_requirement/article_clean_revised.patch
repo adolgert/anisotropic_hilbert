@@ -1,0 +1,251 @@
+--- /mnt/data/article_clean.tex	2025-12-30 00:54:42.012389890 +0000
++++ /mnt/data/article_clean_revised.tex	2025-12-30 00:57:55.661372869 +0000
+@@ -38,6 +38,8 @@
+ 
+ \newcommand{\bits}{\{0,1\}}
+ 
++\newcommand{\Aact}{\mathcal{A}} % active-axis set/list for axis activation
++
+ % For clarity we index physical axes by j \in \{0,\dots,n-1\}.
+ % We index coordinates of \V{k} by t \in \{0,\dots,k-1\}.
+ 
+@@ -418,78 +420,129 @@
+ \section{Unequal side lengths by axis activation}\label{sec:embedding}
+ 
+ Compact Hilbert indices for unequal side lengths \cite{hamilton2008compact} exploit the fact that at coarse levels, axes with small extent contribute no bits.
+-We adopt the same principle but maintain lattice continuity by embedding the gluing construction consistently as new axes become active.
++We adopt the same principle, but we make explicit what is required for lattice continuity when the set of active axes changes with level.
+ 
+-\subsection{Active subspaces in \(\mathbb{F}_2^n\)}
++\subsection{Active subspaces and a consistent axis order}\label{sec:active-subspaces}
+ Fix \(\mathbf{m}=(m_0,\dots,m_{n-1})\) and let \(m_{\max}\coloneqq\max_j m_j\).
+ For each level \(s\in\{1,\dots,m_{\max}\}\), define the active axis set
+ \[
+-A_s \coloneqq \{j\in\{0,\dots,n-1\}: m_j\ge s\},
++\Aact_s \coloneqq \{j\in\{0,\dots,n-1\}: m_j\ge s\},
+ \qquad
+-k_s\coloneqq |A_s|.
++k_s\coloneqq |\Aact_s|.
+ \]
+-Let \(U_s\subseteq V_n\) be the coordinate subspace spanned by \(\{\e{j}:j\in A_s\}\); then \(U_s\cong\V{k_s}\).
+ 
+-Define linear maps (projection to active coordinates and injection back into \(V_n\)):
++To make the identification \(U_s\cong\V{k_s}\) unambiguous across different levels, we fix once and for all an ordering of the physical axes.
++Concretely, choose a permutation \(\tau\) of \(\{0,\dots,n-1\}\) such that
+ \[
+-\pi_s:V_n\to\V{k_s},\qquad (\pi_s(x))_t \coloneqq x_{A_s[t]},
++m_{\tau(0)}\le m_{\tau(1)}\le \cdots \le m_{\tau(n-1)}
+ \]
++(ties broken arbitrarily, e.g. by axis index).
++For each level \(s\), interpret \(\Aact_s\) not only as a set but also as the ordered list obtained by restricting \(\tau\) to the active axes:
+ \[
+-\iota_s:\V{k_s}\to V_n,\qquad (\iota_s(u))_{A_s[t]}\coloneqq u_t\text{ and } (\iota_s(u))_j\coloneqq 0\text{ for }j\notin A_s.
++\Aact_s[0],\dots,\Aact_s[k_s-1]\ \text{is the subsequence of }\tau\text{ consisting of all indices }j\text{ with }m_j\ge s.
+ \]
+-Then \(\iota_s\pi_s\) is the linear projector \(V_n\to U_s\).
++Equivalently, \(\Aact_s\) is a suffix of \(\tau\).
++With this convention, \(\Aact_s\) is a suffix of \(\Aact_{s-1}\): when \(k_{s-1}=k_s+\delta\), the newly activated axes are exactly the first \(\delta\) entries of \(\Aact_{s-1}\), and the previously active axes are shifted up by \(\delta\) positions.
+ 
+-\subsection{Compatible Gray-code families}
+-To recurse across changing \(k_s\), we assume a family of Gray codes \(\{\Gray_k\}_{k=1}^n\) that is compatible with axis activation.
+-One sufficient condition is:
++Let \(U_s\subseteq V_n\) be the coordinate subspace spanned by \(\{\e{j}:j\in \Aact_s\}\); then \(U_s\cong\V{k_s}\).
+ 
+-\begin{definition}[Embedding compatibility]\label{def:compatible}
+-A family \(\{\Gray_k\}\) is \emph{embedding-compatible} if for every \(k<k'\) there exists an injection \(\jmath:\V{k}\to\V{k'}\) (inserting zeros in new coordinates) such that
++Define linear maps (projection to active coordinates and injection back into \(V_n\)):
+ \[
+-\jmath(\Gray_k(w)) = \Gray_{k'}(w)\qquad\text{for all }w\in\{0,\dots,2^k-1\}.
++\pi_s:V_n\to\V{k_s},\qquad (\pi_s(x))_t \coloneqq x_{\Aact_s[t]},
+ \]
+-\end{definition}
++\[
++\iota_s:\V{k_s}\to V_n,\qquad (\iota_s(u))_{\Aact_s[t]}\coloneqq u_t\text{ and } (\iota_s(u))_j\coloneqq 0\text{ for }j\notin \Aact_s.
++\]
++Then \(\iota_s\pi_s\) is the linear projector \(V_n\to U_s\).
+ 
+-The binary reflected Gray code satisfies this property, as do standard inductive Gray-code constructions.
++\subsection{Gray codes and tables are level-local}\label{sec:local-gray}
++For each \(k\in\{1,\dots,n\}\), fix an arbitrary Gray code \(\Gray_k\) satisfying the boundary conditions
++\(
++\Gray_k(0)=\zero
++\)
++and
++\(
++\Gray_k(2^k-1)=\e{0}.
++\)
++For each such \(k\), precompute orientation tables \((\mathrm{entry}_k,\mathrm{dir}_k)\) for \(\Gray_k\) using Algorithm~\ref{alg:table-dp}.
++At level \(s\) of the recursion we use only the data for the current active dimension \(k_s\), namely
++\((\Gray_{k_s},\Rank_{k_s},\mathrm{entry}_{k_s},\mathrm{dir}_{k_s})\).
++
++\begin{remark}[No cross-dimensional Gray-code constraint]\label{rem:no-families}
++The two-level gluing constraint \eqref{eq:glue-low} for a given dimension \(k\) depends only on:
++(i) the Gray code \(\Gray_k\) through its step axes \(d_w=\stepaxis_k(w)\), and
++(ii) the tables \((\mathrm{entry}_k,\mathrm{dir}_k)\) for that same \(k\).
++No equation ever compares \(\Gray_k\) to \(\Gray_{k'}\) for \(k'\neq k\).
++Consequently, lattice continuity for unequal side lengths does not require any ``embedding compatibility'' relation between Gray codes of different dimensions: each \(\Gray_k\) may be chosen independently, and Algorithm~\ref{alg:table-dp} may be run independently for each \(k\).
++\end{remark}
+ 
+-\subsection{Embedding orientation tables}
+-At a level \(s\) with \(k_s=k\), we use the Gray code \(\Gray_k\) on \(\V{k}\) and compute tables \((\mathrm{entry}_k,\mathrm{dir}_k)\) by Algorithm~\ref{alg:table-dp}.
+-To interpret these tables in \(V_n\), lift each entry vector by \(\iota_s\), and interpret each exit axis as the corresponding physical axis in \(A_s\).
++\subsection{Embedding the affine state when axes activate}\label{sec:state-embed}
++When the recursion descends from level \(s\) to \(s-1\), the active dimension can increase from \(k_s\) to \(k_{s-1}=k_s+\delta\) as new axes join \(\Aact_{s-1}\).
++By the suffix convention in \S\ref{sec:active-subspaces}, we identify
++\(
++\V{k_{s-1}}\cong \V{\delta}\times \V{k_s}
++\)
++and write elements as pairs \((v,u)\) with \(v\in\V{\delta}\) (newly activated coordinates) and \(u\in\V{k_s}\) (previously active coordinates).
+ 
+-When the active set grows from \(A_s\) to \(A_{s-1}\) (so \(k_{s-1}=k_s+\delta\)), the natural embedding of states is: act as before on the old coordinates and as identity on the newly activated coordinates.
+-Algebraically, if \(A_s: \V{k_s}\to\V{k_s}\) is the current affine state in active coordinates, define the embedded state on \(\V{k_{s-1}}\) by
+-\[
+-\widetilde{A}_s(u\oplus v) \coloneqq A_s(u)\oplus v,
+-\qquad u\in\V{k_s},\ v\in\V{\delta}.
+-\]
++If \(A:\V{k_s}\to\V{k_s}\) is the current affine state (an affine hypercube automorphism), we extend it to an affine automorphism \(\widetilde{A}:\V{k_{s-1}}\to\V{k_{s-1}}\) by
++\begin{equation}\label{eq:state-embed}
++\widetilde{A}(v,u)\coloneqq (v,\,A(u)).
++\end{equation}
+ 
+-\begin{theorem}[Embedding preserves gluing]\label{thm:embed-glue}
+-Assume \(\{\Gray_k\}\) is embedding-compatible.
+-Let \((\mathrm{entry}_k,\mathrm{dir}_k)\) be any solution of the two-level gluing constraints for \(\Gray_k\).
+-Then extending \(\mathrm{entry}_k\) by zeros in new coordinates and keeping exit directions on the original axes yields a valid solution of the two-level gluing constraints for the embedded Gray code in dimension \(k+\delta\).
+-\end{theorem}
++\begin{lemma}[State embedding preserves inherited endpoints]\label{lem:state-embed}
++The map \(\widetilde{A}\) in \eqref{eq:state-embed} is an affine hypercube automorphism of \(Q_{k_{s-1}}\).
++Moreover, for every \(u\in\V{k_s}\),
++\(
++\widetilde{A}(\zero,u)=(\zero,A(u)).
++\)
++In particular, the entry and exit corners inherited from level \(s\) are preserved on the previously active coordinates, while the newly activated coordinates start at \(0\).
++\end{lemma}
+ 
+ \begin{proof}
+-The two-level gluing constraints are equations in \(\mathbb{F}_2\) involving only XOR, unit vectors, and Gray steps.
+-Embedding by inserting \(\delta\) leading zero coordinates is a linear injection \(\jmath\) that commutes with XOR and maps unit vectors in the old coordinates to unit vectors in the embedded coordinates.
+-By compatibility, Gray steps are preserved under \(\jmath\).
+-Therefore the constraint equations remain true after embedding.
++Write \(A(x)=Px\xor a\) with \(P\) a permutation matrix on \(\V{k_s}\) and \(a\in\V{k_s}\).
++Then \(\widetilde{A}(v,u)=(v,\,Pu\xor a)\), so \(\widetilde{A}\) has permutation matrix \(\mathrm{diag}(I_{\delta},P)\) and translation vector \((\zero,a)\).
++Hence \(\widetilde{A}\) is an affine automorphism of \(Q_{k_{s-1}}\), and \(\widetilde{A}(\zero,u)=(\zero,A(u))\) is immediate.
+ \end{proof}
+ 
++\begin{remark}[Implementation note]
++If one represents affine states using the restricted family \(\T_{e,d}\) from \eqref{eq:affine-T} on packed bit-vectors, then \eqref{eq:state-embed} corresponds exactly to
++\[
++e'\;=\;e\ll \delta,\qquad d'\;=\;d+\delta,
++\]
++i.e. inserting \(\delta\) zeros into the newly activated low coordinates and offsetting the direction index.
++This is the same transformation used in Algorithm~\ref{alg:decode-all-stack-sub}.
++\end{remark}
++
+ \begin{theorem}[Correctness for unequal side lengths]\label{thm:unequal}
+-Fix \(\mathbf{m}\in\mathbb{N}^n\) and assume an embedding-compatible Gray family \(\{\Gray_k\}\).
+-Let \((\mathrm{entry}_{k_s},\mathrm{dir}_{k_s})\) be orientation tables for each active dimension \(k_s\) obtained from Algorithm~\ref{alg:table-dp} and embedded across activation as in Theorem~\ref{thm:embed-glue}.
+-Then the resulting recursive encoder/decoder defines a lattice-continuous bijection on \(\mathcal{D}(\mathbf{m})\).
++Fix \(\mathbf{m}\in\mathbb{N}^n\) and let \(\Aact_s,k_s,\pi_s,\iota_s\) be as above.
++For each \(k\in\{1,\dots,n\}\), let \(\Gray_k\) be any Gray code with \(\Gray_k(0)=\zero\) and \(\Gray_k(2^k-1)=\e{0}\), and let \((\mathrm{entry}_k,\mathrm{dir}_k)\) be any solution of the two-level gluing constraints for \(\Gray_k\) (e.g. Algorithm~\ref{alg:table-dp}).
++Run Algorithms~\ref{alg:encode} and \ref{alg:decode} level by level, using \((\Gray_{k_s},\Rank_{k_s},\mathrm{entry}_{k_s},\mathrm{dir}_{k_s})\) at level \(s\) and extending the affine state across activations via \eqref{eq:state-embed}.
++Then the resulting index \(H:\mathcal{D}(\mathbf{m})\to\{0,\dots,2^M-1\}\) is a bijection and is lattice-continuous.
+ \end{theorem}
+ 
+-\begin{proof}[Proof idea]
+-The argument follows Theorem~\ref{thm:equal-correct} level by level.
+-At level \(s\), only axes in \(A_s\) change; inactive axes contribute zero bits and remain fixed.
+-Within the active subspace, we traverse oriented Gray-code children and use the gluing constraint to cross seams.
+-When new axes become active, Theorem~\ref{thm:embed-glue} ensures the gluing equations remain valid in the larger active subspace.
+-Thus consecutive indices are adjacent in the full grid graph on \(\mathcal{D}(\mathbf{m})\).
+-\end{proof}
++\begin{proof}
++We give an explicit induction on the recursion level.
++For \(s\in\{0,1,\dots,m_{\max}\}\), write \(\mathbf{m}^{(s)}\) for the truncated exponent vector \(\mathbf{m}^{(s)}_j\coloneqq \min(m_j,s)\), and let \(\mathcal{D}^{(s)}\coloneqq \mathcal{D}(\mathbf{m}^{(s)})\).
++At level \(s\), the set \(\mathcal{D}^{(s)}\) decomposes into \(2^{k_s}\) disjoint children indexed by the active level-\(s\) bit-plane \(\ell\in\V{k_s}\), each child being a translate of \(\mathcal{D}^{(s-1)}\) along the physical axes in \(\Aact_s\).
++
++We prove by induction on \(s\) that the recursive decoder on the lowest \(s\) levels produces a Hamiltonian path on \(\mathcal{D}^{(s)}\) (hence a lattice-continuous traversal).
++The base case \(s=0\) is trivial.
++
++For the inductive step \(s\ge 1\), the decoder visits the \(2^{k_s}\) children in the order \(h_w=\Gray_{k_s}(w)\) for \(w=0,\dots,2^{k_s}-1\).
++Child \(w\) corresponds to fixing the level-\(s\) bit-plane on the active axes to \(A(h_w)\) (where \(A\) is the current affine state on \(\V{k_s}\)); this selects one translate of \(\mathcal{D}^{(s-1)}\).
++Within that child, the decoder updates its state by composing with \(U_w\) (chosen from \(\mathrm{entry}_{k_s},\mathrm{dir}_{k_s}\)) and, if \(k_{s-1}>k_s\), applies the state embedding \eqref{eq:state-embed}.
++By the induction hypothesis (applied at level \(s-1\)), the resulting recursive call produces a lattice-continuous traversal within the child.
++
++It remains to check adjacency across the boundary between consecutive children \(w\) and \(w+1\).
++In canonical active coordinates, the parent step axis \(d_w\) is defined by
++\(h_{w+1}=h_w\xor \e{d_w}\) (cf. \eqref{eq:parent-step}).
++The two-level gluing constraint \eqref{eq:glue-low} for \(\Gray_{k_s}\) ensures that the exit corner of child \(w\) and the entry corner of child \(w+1\) differ by exactly one unit step across that shared face in axis \(d_w\).
++Since \(A\) is an affine hypercube automorphism, it preserves adjacency on the active coordinates, and inactive coordinates are unchanged.
++Therefore the last point of child \(w\) is adjacent in the full grid graph to the first point of child \(w+1\).
++Concatenating the \(2^{k_s}\) child paths yields a lattice-continuous path on \(\mathcal{D}^{(s)}\).
+ 
++Finally, the per-level digit extraction in Algorithm~\ref{alg:encode} is the inverse of the per-level Gray evaluation in Algorithm~\ref{alg:decode}, and both update the affine state by the same compositions and embeddings; hence encode and decode are mutual inverses and \(H\) is a bijection.
++\end{proof}
+ \section{Algorithms and implementation order}\label{sec:impl}
+ 
+ The mathematical development above uses bit-plane vectors \(\ell_s(p)\in\V{k_s}\) (or in \(V_n\) with inactive coordinates forced to zero).
+@@ -497,10 +550,10 @@
+ This section states the encode/decode algorithms in a way that makes the dependence on \(\mathbb{F}_2\) operations explicit.
+ 
+ \subsection{Packed bit-planes}
+-Fix an ordering of active axes in each \(A_s\), written as a list \(A_s[0],\dots,A_s[k_s-1]\).
++Use the ordered active-axis lists \(\Aact_s[0],\dots,\Aact_s[k_s-1]\) from \S\ref{sec:active-subspaces}.
+ Given \(p\in\mathcal{D}(\mathbf{m})\), define the packed level-\(s\) bit-plane \(\ell_s\in\V{k_s}\) by
+ \[
+-(\ell_s)_t \coloneqq \text{bit}_{s-1}(p_{A_s[t]}).
++(\ell_s)_t \coloneqq \text{bit}_{s-1}(p_{\Aact_s[t]}).
+ \]
+ Similarly, decode reconstructs these bits and scatters them back to the corresponding physical coordinates.
+ 
+@@ -514,13 +567,13 @@
+ \caption{Encode: point \(p\in\mathcal{D}(\mathbf{m})\) to Hilbert index \(H(p)\)}
+ \label{alg:encode}
+ \begin{algorithmic}[1]
+-\Require Point \(p\in\mathcal{D}(\mathbf{m})\); active sets \(A_s\); Gray codes \(\Gray_{k_s}\) and ranks \(\Rank_{k_s}\); tables \((\mathrm{entry}_{k_s},\mathrm{dir}_{k_s})\)
++\Require Point \(p\in\mathcal{D}(\mathbf{m})\); active sets \(\Aact_s\); Gray codes \(\Gray_{k_s}\) and ranks \(\Rank_{k_s}\); tables \((\mathrm{entry}_{k_s},\mathrm{dir}_{k_s})\)
+ \Ensure Index \(h\in\{0,\dots,2^M-1\}\)
+ \State Initialize affine state \(A\) to the identity on \(\V{k_{m_{\max}}}\)
+ \State \(h\gets 0\)
+ \For{\(s\gets m_{\max}\) \textbf{down to} \(1\)}
+   \State \(k\gets k_s\)
+-  \State Pack \(\ell\in\V{k}\) from \(p\) at bit-plane \(s-1\) over axes \(A_s\)
++  \State Pack \(\ell\in\V{k}\) from \(p\) at bit-plane \(s-1\) over axes \(\Aact_s\)
+   \State \(w\gets \Rank_k\bigl(A^{-1}(\ell)\bigr)\)
+   \State Append digit \(w\) to \(h\) in base \(2^k\)
+   \State Choose \(U_w\) satisfying \eqref{eq:Uw-endpoints} for dimension \(k\)
+@@ -537,7 +590,7 @@
+ \caption{Decode: Hilbert index \(h\) to point \(p\in\mathcal{D}(\mathbf{m})\)}
+ \label{alg:decode}
+ \begin{algorithmic}[1]
+-\Require Index \(h\in\{0,\dots,2^M-1\}\); active sets \(A_s\); Gray codes \(\Gray_{k_s}\); tables \((\mathrm{entry}_{k_s},\mathrm{dir}_{k_s})\)
++\Require Index \(h\in\{0,\dots,2^M-1\}\); active sets \(\Aact_s\); Gray codes \(\Gray_{k_s}\); tables \((\mathrm{entry}_{k_s},\mathrm{dir}_{k_s})\)
+ \Ensure Point \(p\in\mathcal{D}(\mathbf{m})\)
+ \State Extract mixed-radix digits \(w_s\in\{0,\dots,2^{k_s}-1\}\) for \(s=m_{\max},\dots,1\)
+ \State Initialize affine state \(A\) to the identity on \(\V{k_{m_{\max}}}\)
+@@ -545,7 +598,7 @@
+ \For{\(s\gets m_{\max}\) \textbf{down to} \(1\)}
+   \State \(k\gets k_s\)
+   \State \(\ell\gets A\bigl(\Gray_k(w_s)\bigr)\)
+-  \State Scatter bits of \(\ell\) into \(p\) at bit-plane \(s-1\) on axes \(A_s\)
++  \State Scatter bits of \(\ell\) into \(p\) at bit-plane \(s-1\) on axes \(\Aact_s\)
+   \State Choose \(U_{w_s}\) satisfying \eqref{eq:Uw-endpoints} for dimension \(k\)
+   \State \(A\gets A\circ U_{w_s}\)
+   \If{\(k_{s-1}>k_s\)}
+@@ -564,7 +617,7 @@
+ \label{alg:decode-all-stack}
+ \begin{algorithmic}[1]
+ \Require Extents $\mathbf m=(m_0,\dots,m_{n-1})$, $M=\sum_j m_j$
+-\Require Active-axis lists $A_s[0..k_s-1]$ and counts $k_s$ for levels $s=1,\dots,L$ where $L=m_{\max}$
++\Require Active-axis lists $\Aact_s[0..k_s-1]$ and counts $k_s$ for levels $s=1,\dots,L$ where $L=m_{\max}$
+ \Require Gray code vertex map $\Gray_k(w)$ (e.g. BRGC-with-exit-at-axis-0) for each $k$
+ \Require Child-orientation update data for each $k$ (e.g. $\mathrm{entry}_k[w]$, $\mathrm{dir}_k[w]$ or the functions \texttt{child\_entry}, \texttt{child\_dir})
+ \Require Affine apply $\mathrm{Apply}(x,e,d,k)=\rot^d(x)\xor e$ on $k$ bits (as in \texttt{affine\_apply})
+@@ -611,7 +664,7 @@
+     \State $\Delta \gets \pi_{\mathrm{new}} \xor \pi[s]$
+     \For{$t\gets 0$ \textbf{to} $k-1$}
+       \If{$((\Delta \gg t)\,\&\,1)=1$}
+-        \State $p_{A_s[t]} \gets p_{A_s[t]} \xor 2^{\,s-1}$ \Comment{toggle bit-plane $(s-1)$}
++        \State $p_{\Aact_s[t]} \gets p_{\Aact_s[t]} \xor 2^{\,s-1}$ \Comment{toggle bit-plane $(s-1)$}
+       \EndIf
+     \EndFor
+     \State $\pi[s]\gets \pi_{\mathrm{new}}$
