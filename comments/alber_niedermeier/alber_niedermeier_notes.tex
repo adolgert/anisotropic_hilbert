@@ -1,0 +1,534 @@
+
+% Personal notes / rewrite of:
+%   J. Alber and R. Niedermeier, "On Multidimensional Curves with Hilbert Property",
+%   Theory of Computing Systems 33, 295–312 (2000).
+%
+% Goal: keep the mathematics, but rewrite notation and prose in a more "modern / direct"
+% style (closer to article_clean.tex), with a small dictionary to the original paper.
+
+\documentclass[11pt]{article}
+
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+
+% -------------------- Theorem environments --------------------
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
+
+% -------------------- Notation --------------------
+\newcommand{\F}{\mathbb{F}_2}
+\newcommand{\V}[1]{\F^{#1}}
+\newcommand{\bits}{\{0,1\}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\Sym}{\mathrm{Sym}}
+\newcommand{\hd}{d_h} % Hamming distance
+\newcommand{\ord}{\operatorname{ord}}
+
+% L_p metrics (we only really use p in {1,2,infty} here)
+\newcommand{\dOne}{d_1}
+\newcommand{\dTwo}{d_2}
+\newcommand{\dInf}{d_\infty}
+
+% Convenience: r-dimensional dyadic cube grid of order k
+\newcommand{\Grid}[2]{\{0,\dots,2^{#1}-1\}^{#2}}
+
+\title{Notes on Alber--Niedermeier (2000): Multidimensional Curves with Hilbert Property}
+\author{personal rewrite in the style of \texttt{article\_clean.tex}}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{What the paper is doing (in one paragraph)}
+
+Fix a dimension $r\ge 2$.
+We care about indexing the integer grid points of an $r$-dimensional cube
+$\Grid{k}{r}$ (side length $2^k$) by a single integer in such a way that consecutive
+indices land on adjacent grid points (a Hamiltonian path of the grid graph).
+A classical way to do this is the 2D Hilbert curve, which is recursively built from
+rotated/reflected copies of itself.
+Alber--Niedermeier formalize this kind of ``Hilbert-like self-similarity'' in arbitrary
+dimension using only:
+(i) an order-$1$ \emph{generator} (a path through the $2^r$ corners), and
+(ii) a fixed list of cube symmetries that tell you how each recursive subcube is oriented.
+They call such families \emph{CSSIs} and the continuous ones \emph{CHPs}.
+The key structural message is: in this rigid self-similar setting, questions about the
+whole infinite family reduce to checking the small generating data.
+
+\section{Quick dictionary to the original paper}
+
+The original paper uses $1$-based indexing and labels corners by $\{1,\dots,2^r\}$.
+I will mostly use $0$-based indices and identify corners with bit-vectors in $\V{r}$.
+
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+\item Paper: grid of order $k$ has side length $2^k$ and $n^r=(2^k)^r$ points.\\
+Notes: grid is $\Grid{k}{r}=\{0,\dots,2^k-1\}^r$ and has $2^{kr}$ points.
+\item Paper: an indexing is $C:\{1,\dots,(2^k)^r\}\to \{1,\dots,2^k\}^r$.\\
+Notes: an indexing is $C:[0,2^{kr})\to \Grid{k}{r}$.
+\item Paper: corners are $V_r=\{x_1\cdots x_r\mid x_i\in\bits\}$.\\
+Notes: corners are $\V{r}$, written as bit-vectors.
+\item Paper: a corner labeling is $\mathcal I:V_r\to\{1,\dots,2^r\}$.\\
+Notes: a corner labeling is $I:\V{r}\to[0,2^r)$.
+\item Paper: $W_{\mathcal I}\subseteq \Sym(2^r)$ is the ``symmetry group'' w.r.t.~$\mathcal I$.\\
+Notes: I view $W_I$ as the automorphism group of the hypercube on $\V{r}$,
+i.e., all maps $x\mapsto Px\oplus a$ (permutation of coordinates + bit-flips).
+When you insist on labels $[0,2^r)$, you recover the paper's definition by conjugation.
+\end{itemize}
+
+\section{Preliminaries: grids, indexings, curves}
+
+\subsection{Indexings and the curve condition}
+
+Fix $r\ge 1$ and $k\ge 1$.
+Let $\Grid{k}{r}$ be the set of lattice points in the $r$-cube of side length $2^k$.
+We view $\Grid{k}{r}$ as a grid graph: $p,q\in\Grid{k}{r}$ are adjacent if
+$\|p-q\|_1=1$.
+
+\begin{definition}[Indexing and curve]
+An \emph{$r$-dimensional indexing of order $k$} is a bijection
+\[
+C:[0,2^{kr})\to \Grid{k}{r}.
+\]
+It is a \emph{curve} (lattice-continuous) if
+\[
+\|C(t+1)-C(t)\|_1=1\qquad\text{for all }t\in[0,2^{kr}-1).
+\]
+\end{definition}
+
+\subsection{Corners and Gray codes}
+
+The $2^r$ corners of an $r$-cube can be identified with $\V{r}$.
+Two corners are adjacent (share an edge) iff they differ in exactly one bit.
+So an order-$1$ \emph{continuous} indexing is exactly a Hamiltonian path on the
+$r$-dimensional hypercube graph $Q_r$ (a Gray code).
+
+This viewpoint is useful because Alber--Niedermeier really build everything from an
+order-$1$ object.
+
+\section{CSSIs: self-similar indexings from a generator + symmetries}
+
+This is the core formalism of the paper.
+
+\subsection{Corner labelings and the symmetry group}
+
+A \emph{corner labeling} is just a way to name the $2^r$ corners.
+
+Formally, fix a bijection $I:\V{r}\to[0,2^r)$.
+This induces an adjacency predicate on labels:
+\[
+n_I(a,b)=
+\begin{cases}
+1 & \text{if } \hd\!\bigl(I^{-1}(a),I^{-1}(b)\bigr)=1,\\
+0 & \text{otherwise,}
+\end{cases}
+\]
+where $\hd$ is Hamming distance.
+
+Then define $W_I$ to be the set of all permutations of $[0,2^r)$ that preserve this
+adjacency relation:
+\[
+W_I\coloneqq\{\pi\in\Sym(2^r)\mid n_I(a,b)=n_I(\pi(a),\pi(b))\ \forall a,b\}.
+\]
+Intuition: elements of $W_I$ are exactly the rotations/reflections of the $r$-cube,
+expressed as permutations of corner labels.
+
+\paragraph{From corner permutations to grid symmetries.}
+Each $\pi\in W_I$ acts on corners by conjugation,
+\[
+\pi_I \;\coloneqq\; I^{-1}\circ \pi \circ I:\V{r}\to\V{r},
+\]
+and this corner action extends in the obvious way to an isometry of the full grid
+$\Grid{k}{r}$ (permute axes and/or reflect along axes).
+The paper writes this induced grid map as $(\pi:I)$ and then freely identifies $\pi$
+with $(\pi:I)$.
+I'll also do that when it is clear from context.
+
+\subsection{Partitioning the order-$k$ cube into $2^r$ subcubes}
+
+For $k\ge 2$, partition $\Grid{k}{r}$ into $2^r$ disjoint subcubes of order $k-1$,
+indexed by corners $x\in \V{r}$.
+
+Define the lower-left (minimal) corner of subcube $x$ by
+\[
+p^{(k)}(x)\coloneqq 2^{k-1}\,x \in \Grid{k}{r}.
+\]
+So subcube $x$ is exactly
+\[
+p^{(k)}(x) + \Grid{k-1}{r}.
+\]
+
+\subsection{The basic construction step}
+
+Suppose we already have an indexing $C_{k-1}$ of order $k-1$.
+Fix a corner labeling $I$ and choose a list of $2^r$ cube symmetries
+\[
+\tau_0,\tau_1,\dots,\tau_{2^r-1}\in W_I.
+\]
+These will be used \emph{in that order} to orient the copy of $C_{k-1}$ placed into
+each subcube.
+
+Write $N\coloneqq 2^{(k-1)r}$ (points per subcube).
+Given a global time $t\in[0,2^{kr})$, split it into
+\[
+q\coloneqq \left\lfloor \frac{t}{N}\right\rfloor\in[0,2^r),
+\qquad
+s\coloneqq t\bmod N\in[0,N).
+\]
+Then $q$ selects \emph{which} subcube we are in, and $s$ is the local time within that
+subcube.
+Let $x_q\coloneqq I^{-1}(q)\in\V{r}$ be the corresponding corner.
+
+The construction formula is
+\begin{equation}\label{eq:construct}
+C_k(t)\;=\; (\tau_q:I)\bigl(C_{k-1}(s)\bigr)\;+\; p^{(k)}(x_q).
+\end{equation}
+
+This is the same idea as the 2D Hilbert curve: visit the $2^r$ subcubes in some
+corner-order, and inside each subcube run a rotated/reflected copy of the previous
+curve.
+
+\begin{definition}[Constructor relation (paper's Definition 1)]\label{def:constructor}
+Let $C_{k-1}$ and $C_k$ be indexings of orders $k-1$ and $k$.
+If \eqref{eq:construct} holds for some corner labeling $I$ and some
+$\tau_0,\dots,\tau_{2^r-1}\in W_I$, we write
+\[
+C_{k-1}\ \xRightarrow[I]{(\tau_0,\dots,\tau_{2^r-1})}\ C_k,
+\]
+and we call $C_{k-1}$ a \emph{constructor} of $C_k$.
+\end{definition}
+
+\subsection{CSSIs and CHPs}
+
+A \emph{CSSI} is what you get if you iterate the same construction rule at every level.
+
+\begin{definition}[CSSI and CHP (paper's Definition 2)]\label{def:cssi}
+A family $\mathcal C=\{C_k\mid k\ge 1\}$ is a \emph{class of self-similar indexings}
+(\textbf{CSSI}) if there exist
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+\item a base indexing $C_1$ of order $1$, and
+\item a fixed list of symmetries $\tau_0,\dots,\tau_{2^r-1}\in W_{\widetilde C_1}$,
+\end{itemize}
+such that for every $k\ge 2$ we have
+\[
+C_{k-1}\ \xRightarrow[\widetilde C_1]{(\tau_0,\dots,\tau_{2^r-1})}\ C_k.
+\]
+Here $\widetilde C_1:\V{r}\to[0,2^r)$ is the \emph{canonical corner labeling} induced by
+$C_1$ (it labels a corner by the time when $C_1$ visits it).
+
+We write
+\[
+\mathcal H(C_1;\tau_0,\dots,\tau_{2^r-1})\coloneqq\{C_k\mid k\ge 1\}
+\]
+for the resulting CSSI, and we call $C_1$ the \emph{generator}.
+
+A CSSI is a \emph{class with Hilbert property} (\textbf{CHP}) if every $C_k$ is a curve.
+\end{definition}
+
+\begin{remark}[``Check it in the small'']
+Because the same local rule is used at every level, continuity questions are local.
+In practice: once $C_2$ is continuous, the same seam pattern repeats at all larger scales,
+so all $C_k$ will be continuous. This is the intuition behind the paper's emphasis that
+large-scale properties can be detected from the small generating elements.
+\end{remark}
+
+\subsection{Example: the classical 2D Hilbert curve}
+
+The standard 2D Hilbert curve is exactly a CHP obtained from:
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+\item a generator $C_1$ that visits the four corners in a Gray-code order, and
+\item four symmetries $\tau_0,\dots,\tau_3$ that rotate/reflect the copies in the four
+quadrants so the pieces glue into one continuous path.
+\end{itemize}
+
+The paper records this as
+$\mathcal H(\mathrm{Hil}^2_1;((2\,4),\id,\id,(1\,3)))=\{\mathrm{Hil}^2_k\mid k\ge 1\}$.
+I will not reproduce their corner-label convention here; the important part is:
+\emph{one generator + one fixed list of subcube symmetries completely specifies the whole family.}
+
+\section{Disturbing a CSSI by a symmetry}
+
+Section 3.2 of the paper is about a simple but powerful point:
+if you ``disturb'' one level of a CSSI by a global cube symmetry, this disturbance
+propagates through the recursion in a rigid algebraic way.
+
+\subsection{How to read $(\varphi:I)$}
+
+Fix a corner labeling $I$.
+Given $\varphi\in W_I$, the paper writes $(\varphi:I)$ for the induced symmetry map
+on the grid.
+Composing a curve $C$ with $(\varphi:I)$ means: take every point visited by $C$ and
+rotate/reflect the whole picture by that symmetry.
+
+\subsection{Disturbing the constructor}
+
+\begin{lemma}[Disturbing the constructor (paper's Lemma 1)]\label{lem:disturb-constructor}
+Let $C_{k-1}$ and $C_k$ be indexings of orders $k-1$ and $k$.
+Assume
+\[
+C_{k-1}\ \xRightarrow[I]{(\tau_0,\dots,\tau_{2^r-1})}\ C_k
+\]
+for some corner labeling $I$ and symmetries $\tau_q\in W_I$.
+
+Then for every $\varphi\in W_I$,
+\[
+(\varphi:I)\circ C_{k-1}\ \xRightarrow[I]{(\tau_0\circ\varphi^{-1},\dots,\tau_{2^r-1}\circ\varphi^{-1})}\ C_k.
+\]
+\end{lemma}
+
+\begin{proof}
+Write the construction of $C_k$ as in \eqref{eq:construct}.
+Inside subcube $q$ we have the map $(\tau_q:I)\circ C_{k-1}$.
+If we replace $C_{k-1}$ by $(\varphi:I)\circ C_{k-1}$, then inside subcube $q$ we get
+\[
+(\tau_q:I)\circ (\varphi:I)\circ C_{k-1}
+= ((\tau_q\circ\varphi):I)\circ C_{k-1}.
+\]
+To keep the same $C_k$, we therefore need to replace $\tau_q$ by
+$\tau_q\circ\varphi^{-1}$, which gives exactly the claim.
+(Algebraically this is just ``pulling'' $\varphi$ through the composition.)
+\end{proof}
+
+\subsection{Disturbing the corner labeling instead}
+
+Lemma~\ref{lem:disturb-constructor} says: changing the constructor can be absorbed
+by adjusting the $\tau$'s.
+Lemma 2 says: you can instead keep the constructor but relabel corners and compare
+with the globally transformed curve.
+
+\begin{lemma}[Disturbing the corner labeling (paper's Lemma 2)]\label{lem:disturb-label}
+Assume the setup of Lemma~\ref{lem:disturb-constructor}.
+Fix $\varphi\in W_I$ and define a \emph{new} corner labeling
+\[
+K \coloneqq \varphi^{-1}\circ I.
+\]
+Let $\Phi$ denote the induced symmetry map on the grid (so $\Phi=(\varphi:I)$ in the
+paper's notation; the point is that it is the same geometric symmetry no matter which
+labeling you use).
+
+Then
+\[
+C_{k-1}\ \xRightarrow[K]{(\tau_0\circ\varphi,\dots,\tau_{2^r-1}\circ\varphi)}\ \Phi\circ C_k.
+\]
+\end{lemma}
+
+\begin{proof}[Proof idea]
+Changing the labeling from $I$ to $K=\varphi^{-1}\circ I$ is just a relabeling of the
+$2^r$ subcubes.
+Under this relabeling, a permutation $\pi$ of labels acting under $I$ becomes the
+conjugated permutation $\varphi^{-1}\circ \pi\circ \varphi$ under $K$.
+If you apply this bookkeeping to the construction formula \eqref{eq:construct},
+you get that transforming the \emph{whole} curve by $\Phi$ is equivalent to:
+(i) changing the labeling to $K$, and (ii) multiplying each $\tau_q$ by $\varphi$.
+\end{proof}
+
+\subsection{A global consequence: symmetry shows up already in the generator}
+
+\begin{theorem}[Symmetry at one level $\Leftrightarrow$ symmetry at all levels (paper's Theorem 3)]
+\setcounter{theorem}{2} % make this Theorem 3
+Let $\mathcal H(C_1;\tau_0,\dots,\tau_{2^r-1})=\{C_k\mid k\ge 1\}$ and
+$\mathcal H(D_1;\tau_0,\dots,\tau_{2^r-1})=\{D_k\mid k\ge 1\}$ be two CSSIs
+built with the same $\tau$-list (each interpreted under the canonical labeling of its
+own generator).
+
+Fix a cube symmetry $\varphi$ (formally $\varphi\in W_{\widetilde C_1}$) and let
+$\Phi$ be the corresponding geometric symmetry of the grid.
+Then the following are equivalent:
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+\item $\Phi\circ C_{k_0}=D_{k_0}$ for some $k_0\ge 1$,
+\item $\Phi\circ C_k=D_k$ for all $k\ge 1$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+(ii)$\Rightarrow$(i) is immediate.
+
+For (i)$\Rightarrow$(ii): first observe that if the equality holds at some level $k_0$,
+then it already forces the generators to match under the same symmetry,
+$\Phi\circ C_1=D_1$, because the order-$k_0$ curve is built from $2^r$ copies of the
+generator arranged along the generator's canonical corner labeling.
+
+Then do induction on $k$.
+Assume $D_k=\Phi\circ C_k$.
+Use Lemma~\ref{lem:disturb-constructor} to rewrite the construction of $C_{k+1}$
+in terms of a disturbed constructor, and use Lemma~\ref{lem:disturb-label} to
+translate this disturbance to the construction of $\Phi\circ C_{k+1}$.
+This shows $D_{k+1}=\Phi\circ C_{k+1}$.
+\end{proof}
+
+\begin{remark}[Why this matters]
+Theorem~3 is the workhorse behind the classification results.
+It says: if two self-similar families ever become the same up to symmetry, then they
+were already the same (up to that symmetry) at the generator level.
+So ``structural'' questions are reduced to a finite search over order-$1$ generators
+and finite $\tau$-lists.
+\end{remark}
+
+\section{Applications to CHPs}
+
+\subsection{Classification in 2D}
+
+\begin{theorem}[Uniqueness of the 2D Hilbert curve (paper's Theorem 4)]
+\setcounter{theorem}{3} % now Theorem 4
+Up to global rotation/reflection (``modulo symmetry''), the classical 2D Hilbert curve
+is the only 2D CHP.
+\end{theorem}
+
+\begin{proof}[What is being claimed / proof idea]
+There are two finite checks:
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+\item At order $1$ (a $2\times 2$ grid), the only continuous generator (up to symmetry)
+is the obvious Gray-code path through the four corners.
+\item Given that generator, you can brute-force (or reason combinatorially) about the
+four subcube symmetries $\tau_0,\dots,\tau_3$ needed to build a continuous order-$2$
+curve whose endpoints are corners. Only the classical Hilbert choice works.
+\end{itemize}
+Once order $2$ is fixed, self-similarity forces all higher orders.
+\end{proof}
+
+\subsection{``Simple'' CHPs and a basic restriction on generators}
+
+For $r\ge 3$ the number of possible CHPs explodes, so the paper restricts attention to
+a natural subclass.
+
+\begin{definition}[Simple CHP]
+A CHP is \emph{simple} if (for every $k$) the start- and endpoints of $C_k$ are corners
+of $\Grid{k}{r}$.
+Equivalently, the generator $C_1$ starts and ends at corners and the recursion preserves
+this.
+\end{definition}
+
+\begin{remark}[Generators cannot start and end at opposite corners (paper's Remark 5)]
+\setcounter{remark}{4} % make this Remark 5
+Let $C_1$ be the generator of a simple $r$-dimensional CHP, and let $\widetilde C_1$
+be its canonical corner labeling.
+Then the first and last corners visited by $C_1$ are \emph{not} diagonally opposite:
+\[
+\hd\!\bigl(\widetilde C_1^{-1}(0),\,\widetilde C_1^{-1}(2^r-1)\bigr)\;<\; r.
+\]
+Intuition: if the generator's endpoints were opposite corners, then in an order-$2$
+construction you would get stuck after placing only a couple of subcubes; there is no
+way to glue $2^r$ copies continuously.
+\end{remark}
+
+\subsection{Classification in 3D}
+
+\begin{theorem}[How many simple 3D CHPs exist (paper's Theorem 6)]
+\setcounter{theorem}{5} % make this Theorem 6
+In dimension $r=3$, there are exactly $6\cdot 2^8 = 1536$ structurally different
+simple CHPs, where ``structurally different'' means \emph{not} identical up to a global
+rotation/reflection.
+\end{theorem}
+
+\begin{proof}[Proof idea (as in the paper)]
+Use Theorem~3 to reduce everything to order-$1$ data.
+Then:
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+\item Enumerate continuous 3D generators modulo symmetry. The paper reports three
+types (called $\mathrm{Hil}^{3,A}_1$, $\mathrm{Hil}^{3,B}_1$, $\mathrm{Hil}^{3,C}_1$).
+\item For each generator type, enumerate all $\tau$-lists that produce a continuous
+order-$2$ curve along the generator's canonical corner labeling.
+\item Remark~5 rules out type $C$ as a generator for \emph{simple} CHPs.
+\item For type $A$ there are $4$ distinct continuous ``arrangements''; for type $B$ there
+are $2$.
+In each of the $8$ subcubes of the order-$2$ cube there are $2$ orientation choices,
+so each arrangement yields $2^8$ different CHPs.
+\end{enumerate}
+Total $=(4+2)\cdot 2^8 = 6\cdot 2^8$.
+\end{proof}
+
+\subsection{Constructing CHPs in higher dimensions}
+
+The paper also sketches an inductive construction of at least one CHP in every
+dimension:
+roughly, you can build an $r$-dimensional \emph{generator} by joining two
+$(r-1)$-dimensional generators and using the new dimension as a short connector.
+(The paper gives a concrete 4D example with an explicit generator $\mathrm{Hil}^4_1$
+and an explicit list of $16$ symmetries.)
+
+I do not rewrite the 4D figure/table here, but the takeaway is:
+\emph{their formalism makes it easy to talk about and compute with higher-dimensional
+Hilbert-like curves once you have the generating elements.}
+
+\subsection{Recursive computation}
+
+Given a CSSI specified by $(C_1;\tau_0,\dots,\tau_{2^r-1})$, the recursion
+\eqref{eq:construct} is already an algorithm.
+
+\paragraph{Decoding: index $\to$ grid point.}
+To compute $C_k(t)$ for a large $k$:
+repeatedly split $t$ into $(q,s)$ (subcube number + local index),
+apply the appropriate symmetry $\tau_q$ at that level, and add the offset $p^{(k)}(I^{-1}(q))$.
+
+\paragraph{Encoding: grid point $\to$ index.}
+The inverse map (point to index) is more delicate, but in practice it can be computed
+by following the same recursion top-down: identify which subcube the point lies in,
+undo that subcube's symmetry, recurse, and concatenate digits.
+(Alber--Niedermeier mainly emphasize the structural recursion; later work focuses on
+fast bit-level encoders.)
+
+\section{Locality}
+
+The last technical part of the paper reviews locality measures and gives explicit
+constants for the 2D Hilbert curve.
+
+\subsection{The $L_p$ locality measure}
+
+Let $C:[0,n^r)\to\{0,\dots,n-1\}^r$ be a curve.
+For $p\in\{1,2,\infty\}$ define
+\[
+L_p(C)\coloneqq \max_{\substack{i,j\in[0,n^r)\\ i\neq j}}
+\frac{ d_p\!\bigl(C(i),C(j)\bigr)^r}{|i-j|}.
+\]
+This is the paper's definition (their Equation (2) is the $p=2$ case).
+
+\subsection{Explicit bounds for 2D Hilbert}
+
+\begin{theorem}[Uniform locality bounds in 2D (paper's Theorem 7)]
+\setcounter{theorem}{6} % make this Theorem 7
+Let $\mathcal H^2=\{\mathrm{Hil}^2_k\mid k\ge 1\}$ be the classical 2D Hilbert CHP.
+Then for every order $k\ge 1$,
+\[
+L_1(\mathrm{Hil}^2_k)\le 9\frac{3}{5},\qquad
+L_2(\mathrm{Hil}^2_k)\le 6\frac{1}{2},\qquad
+L_\infty(\mathrm{Hil}^2_k)\le 6\frac{2}{5}.
+\]
+\end{theorem}
+
+\begin{proof}[Proof idea (high level)]
+Fix two indices $i<j$ and set $s=j-i$.
+Choose a scale $m$ so that $4^{m-1}< s\le 4^m$ (so $s$ spans about $m$ blocks at the
+next coarser Hilbert scale).
+Now subdivide the $2^k\times 2^k$ grid into subgrids of side length $2^{m-1}$ and use
+self-similarity to argue that the subpath from $i$ to $j$ must live in a sequence of
+$\ell$ or $\ell+1$ such subgrids (for a small $\ell$ depending on $m$).
+The crucial point is that in the 2D Hilbert curve, there are only finitely many possible
+patterns for such ``subgrid sequences'' up to symmetry.
+You can therefore enumerate worst cases and obtain uniform upper bounds for the
+ratios $d_p^2/|i-j|$.
+The paper carries this out (with a further refinement step at scale $2^{m-2}$) and
+extracts the constants above.
+\end{proof}
+
+\section{What I personally take away}
+
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+\item A ``Hilbert-like'' multidimensional curve is \emph{not} a single object; in 3D there
+are many non-equivalent ones. The generator+symmetry formalism makes this explicit.
+\item Theorem~3 is the conceptual core: in a rigid self-similar family, global symmetry
+behavior is already visible at the generator level.
+\item This directly enables classification-by-search in low dimensions (2D unique, 3D
+has $1536$ simple variants).
+\item For analysis tasks like locality, self-similarity lets you reduce to finitely many
+small patterns (the proof strategy behind Theorem~7).
+\end{itemize}
+
+\end{document}
