@@ -1,0 +1,263 @@
+\documentclass{article}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}      % For \coloneqq and other extensions
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}       % For nice tables
+\usepackage{array}
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\DeclareGraphicsExtensions{.pdf,.png,.jpg}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}       % For customized lists
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
+\usepackage{geometry}
+\geometry{
+  left=0.75in,
+  right=3in,
+  top=0.5in,
+  bottom=0.7in
+}
+\usepackage{setspace}
+\onehalfspacing
+
+% ============================================================================
+% THEOREM ENVIRONMENTS
+% ============================================================================
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% ============================================================================
+% CUSTOM COMMANDS FOR NOTATION
+% ============================================================================
+% Bit operations (matching Hamilton's notation)
+\newcommand{\XOR}{\oplus}           % XOR: exclusive or
+\newcommand{\AND}{\mathbin{\wedge}}            % AND
+\newcommand{\OR}{\mathbin{\vee}}               % OR
+\newcommand{\NOT}{\mathord{\sim}}              % NOT (bitwise complement)
+\newcommand{\SHL}{\mathbin{\triangleleft}}     % Shift left
+\newcommand{\SHR}{\mathbin{\triangleright}}    % Shift right
+\newcommand{\ROTL}{\mathbin{\circlearrowleft}} % Rotate left
+\newcommand{\ROTR}{\mathbin{\circlearrowright}}% Rotate right
+\newcommand{\vplus}{\mathbin{\oplus}}   % plus
+\newcommand{\vtimes}{\mathbin{\otimes}}
+
+% Convenient shortcuts
+\newcommand{\gc}{g}                  % Gray code function
+\newcommand{\gcinv}{g^{-1}}          % Gray code inverse
+\newcommand{\bitfn}{\mathrm{bit}}              % bit extraction function
+\newcommand{\tsb}{\mathrm{tsb}}                % trailing set bits
+\newcommand{\entry}{e}                % entry point function
+\newcommand{\exitpt}{f}               % exit point function (f for "finish")
+\newcommand{\dir}{d}                  % direction function
+\newcommand{\gcr}{\mathrm{gcr}}                % Gray code rank
+\newcommand{\order}{m_{\text{max}}}
+\newcommand{\dk}{dk}
+\newcommand{\embed}{\kappa}
+\newcommand{\brgc}{BRGC}
+% Sets
+\newcommand{\Z}{\mathbb{Z}}                    % Integers
+\newcommand{\N}{\mathbb{N}}                    % Natural numbers
+\newcommand{\B}{\mathbb{B}}                    % Binary digits {0,1}
+
+% Other
+\newcommand{\encode}{\mathrm{encode}}
+\newcommand{\decode}{\mathrm{decode}}
+
+
+\title{Lattice-Continuous Compact Hilbert Indices via Affine Transformations on Hypercubes}
+\author{Andrew Dolgert}
+\date{\today}
+
+
+\begin{document}
+\maketitle
+\begin{abstract}
+Space-filling curves are fundamental to combinatorial optimization and multidimensional indexing.
+Existing compact linearizations for unequal dimensions fail to preserve lattice continuity (adjacency), degrading locality.
+We introduce a general construction using Gray codes and affine transformations in $\mathbb{F}_2^n$.
+We prove this construction yields a lattice-continuous mapping for arbitrary dimension extents and provide an $O(mn)$ time algorithm.
+\end{abstract}
+\section{Introduction}
+
+\section{Experimental Validation}
+
+\begin{table}[htbp]
+\centering
+\caption{Hilbert Curve Variants for Experiments}
+\label{tab:curve-variants}
+\begin{tabular}{c p{3cm} c c c p{3cm}}
+\hline
+Label & Construction & Gray code & Transforms & Lattice continuous & Notes \\
+\hline
+Hamilton-CHI & Removal of inactive indices & \brgc & Hamilton's $T_{e,d}$ & No & Algorithm from Hamilton and Rao-Chaplin~\cite{hamilton2008compact}. \\
+\hline
+LC-BRGC & This article & \brgc & Tabular & Yes & Uses \brgc but solves for the transforms \\
+\hline
+LC-Balanced & This article & Balanced & Tabular & Yes & The best known variant for locality \\
+\hline
+LC-Random & This article & Random & Tabular & Yes & As a robustness check \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Selected Domains for Experiments}
+\label{tab:domains}
+\begin{tabular}{lrrrrr}
+\hline
+Domain ID & $m=(m_x,m_y)$ & Grid size & Aspect Ratio & Total bits $M$ & Points $N=2^M$ \\
+\hline
+D0 & (9,9) & 512 x 512 & 1 : 1 & 18 & 262,144 \\
+D1 & (11, 7) & 2048 x 128 & 16 : 1 & 18 & 262,144 \\
+D2 & (12, 6) & 4096 x 64 & 64 : 1 & 18 & 262,144 \\
+D3 & (13, 5) & 8192 x 32 & 256 : 1 & 18 & 262,144 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{discontinuities_by_perimeter_2d}
+\caption{Size of the largest discontinuity by perimeter for 2D domains for Compact Hilbert Indices
+from Hamilton and Rao-Chaplin~\cite{hamilton2008compact}.}
+\label{fig:discontinuities-perimeter-2d}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\label{tab:locality-metrics}
+\begin{tabular}{llrrrr}
+\toprule
+Domain & Aspect & Hamilton $\mathrm{WL}_\infty$ & LC-CHI $\mathrm{WL}_\infty$ & Hamilton WBA & LC-CHI WBA \\
+\midrule
+$512 \times 512$   & 1:1   & 4.75 & 4.75  & 2.29 & 2.29 \\
+$2048 \times 128$  & 16:1  & 442  & 4.75  & 435  & 2.29 \\
+$4096 \times 64$   & 64:1  & 384  & 7.62  & 416  & 2.29 \\
+$8192 \times 32$   & 256:1 & 512  & 26.2  & 528  & 2.33 \\
+\bottomrule
+\end{tabular}
+\caption{Worst-case locality metrics for Hamilton-CHI and LC-BRGC across rectangular domains.
+Key metrics: $\mathrm{WL}_\infty$ (Chebyshev locality), $\mathrm{WL}_2$ (Euclidean locality),
+$\mathrm{WL}_1$ (Manhattan locality), WBA (bounding box area ratio), WBP (bounding box perimeter ratio).}
+\end{table}
+
+
+\begin{table}[htpb]
+\centering
+\label{tab:bounding-box-stats}
+\begin{tabular}{llrrrrr}
+\toprule
+Domain & Curve & Block size $B$ & Mean $\frac{\text{bbox}}{B}$ & P95 $\frac{\text{bbox}}{B}$ & Max $\frac{\text{bbox}}{B}$ & Max $\frac{\text{peri}}{\sqrt{B}}$ \\
+\midrule
+512$\times$512 & Hamilton & 32 & 1 & 1 & 1 & 4.24 \\
+ & LC-BRGC & 32 & 1 & 1 & 1 & 4.24 \\
+ & Hamilton & 100 & 1.35 & 1.68 & 1.92 & 5.6 \\
+ & LC-BRGC & 100 & 1.35 & 1.68 & 1.92 & 5.6 \\
+ & Hamilton & 500 & 1.41 & 1.79 & 2.05 & 5.72 \\
+ & LC-BRGC & 500 & 1.41 & 1.79 & 2.05 & 5.72 \\
+ & Hamilton & 1024 & 1 & 1 & 1 & 4 \\
+ & LC-BRGC & 1024 & 1 & 1 & 1 & 4 \\
+\addlinespace
+2048$\times$128 & Hamilton & 32 & 1 & 1 & 1 & 4.24 \\
+ & LC-BRGC & 32 & 1 & 1 & 1 & 4.24 \\
+ & Hamilton & 100 & 2.33 & 1.68 & 174.08 & 52.8 \\
+ & LC-BRGC & 100 & 1.35 & 1.68 & 1.92 & 5.6 \\
+ & Hamilton & 500 & 2.43 & 2.05 & 40.96 & 25.76 \\
+ & LC-BRGC & 500 & 1.41 & 1.79 & 2.05 & 5.72 \\
+ & Hamilton & 1024 & 1 & 1 & 1 & 4 \\
+ & LC-BRGC & 1024 & 1 & 1 & 1 & 4 \\
+\addlinespace
+4096$\times$64 & Hamilton & 32 & 1 & 1 & 1 & 4.24 \\
+ & LC-BRGC & 32 & 1 & 1 & 1 & 4.24 \\
+ & Hamilton & 100 & 2.38 & 1.92 & 51.2 & 28.8 \\
+ & LC-BRGC & 100 & 1.35 & 1.68 & 1.92 & 5.6 \\
+ & Hamilton & 500 & 2.45 & 10.24 & 10.24 & 12.88 \\
+ & LC-BRGC & 500 & 1.4 & 1.79 & 2.05 & 5.72 \\
+ & Hamilton & 1024 & 1 & 1 & 1 & 4 \\
+ & LC-BRGC & 1024 & 1 & 1 & 1 & 4 \\
+\addlinespace
+8192$\times$32 & Hamilton & 32 & 1 & 1 & 1 & 4.24 \\
+ & LC-BRGC & 32 & 1 & 1 & 1 & 4.24 \\
+ & Hamilton & 100 & 2.39 & 12.8 & 12.8 & 14.4 \\
+ & LC-BRGC & 100 & 1.34 & 1.68 & 1.92 & 5.6 \\
+ & Hamilton & 500 & 2.31 & 4.1 & 4.1 & 8.59 \\
+ & LC-BRGC & 500 & 1.49 & 2.05 & 2.05 & 5.72 \\
+ & Hamilton & 1024 & 1 & 1 & 1 & 4 \\
+ & LC-BRGC & 1024 & 1 & 1 & 1 & 4 \\
+\bottomrule
+\end{tabular}
+\caption{This is the “indexing application” table. It is more intuitive than 
+WBA/WBP
+WBA/WBP and more directly tied to how SFCs are used to build blocks (e.g., R-tree leaves). Haverkort motivates this style of evaluation by grouping consecutive points into blocks and measuring block bounding boxes. Computation: deterministic (no sampling) if you just partition the full curve into consecutive blocks of size B. Report both average and max because seam jumps tend to show up in the max/tails.}
+\end{table}
+
+\begin{table}[htpb]
+\centering
+\label{tab:range-query}
+\begin{tabular}{lrrrrl}
+\toprule
+Curve & Query window & Mean clusters & P95 clusters & Max clusters & Method \\
+\midrule
+Hamilton & 4$\times$4 & 3.97 & 6 & 7 & exhaustive (249,673) \\
+LC-BRGC & 4$\times$4 & 3.97 & 6 & 6 & exhaustive (249,673) \\
+LC-Balanced & 4$\times$4 & 3.97 & 6 & 6 & exhaustive (249,673) \\
+LC-Random & 4$\times$4 & 3.97 & 6 & 6 & exhaustive (249,673) \\
+\addlinespace
+Hamilton & 8$\times$8 & 7.92 & 13 & 14 & exhaustive (233,073) \\
+LC-BRGC & 8$\times$8 & 7.94 & 13 & 14 & exhaustive (233,073) \\
+LC-Balanced & 8$\times$8 & 7.94 & 13 & 14 & exhaustive (233,073) \\
+LC-Random & 8$\times$8 & 7.94 & 13 & 14 & exhaustive (233,073) \\
+\addlinespace
+Hamilton & 16$\times$16 & 15.83 & 26 & 29 & exhaustive (199,969) \\
+LC-BRGC & 16$\times$16 & 15.85 & 26 & 26 & exhaustive (199,969) \\
+LC-Balanced & 16$\times$16 & 15.85 & 26 & 26 & exhaustive (199,969) \\
+LC-Random & 16$\times$16 & 15.85 & 26 & 26 & exhaustive (199,969) \\
+\addlinespace
+Hamilton & 64$\times$4 & 33.64 & 53 & 55 & exhaustive (246,013) \\
+LC-BRGC & 64$\times$4 & 33.56 & 54 & 59 & exhaustive (246,013) \\
+LC-Balanced & 64$\times$4 & 33.56 & 54 & 59 & exhaustive (246,013) \\
+LC-Random & 64$\times$4 & 33.56 & 54 & 59 & exhaustive (246,013) \\
+\addlinespace
+Hamilton & 4$\times$64 & 32.06 & 52 & 60 & exhaustive (4,093) \\
+LC-BRGC & 4$\times$64 & 31.99 & 51 & 51 & exhaustive (4,093) \\
+LC-Balanced & 4$\times$64 & 31.99 & 51 & 51 & exhaustive (4,093) \\
+LC-Random & 4$\times$64 & 31.99 & 51 & 51 & exhaustive (4,093) \\
+\addlinespace
+Hamilton & 32$\times$32 & 31.47 & 50 & 54 & exhaustive (134,145) \\
+LC-BRGC & 32$\times$32 & 31.57 & 50 & 53 & exhaustive (134,145) \\
+LC-Balanced & 32$\times$32 & 31.57 & 50 & 53 & exhaustive (134,145) \\
+LC-Random & 32$\times$32 & 31.57 & 50 & 53 & exhaustive (134,145) \\
+\bottomrule
+\end{tabular}
+\caption{This is a range query, done by exhaustive enumeration. This counts the number of clusters within a query window, but it doesn't count the size
+of the gaps, so it doesn't differentiate strongly between breaks in locality
+and large adjacency skips~\cite{moon2001analysis}.}
+\end{table}
+
+
+\section{Conclusion}
+We have a new algorithm to find Hilbert curves.
+
+We have a new algorithm to generate a sequence of points ranked
+by their Hilbert index.
+
+We have a new algorithm to construct Hilbert curves of unequal side
+lengths that are lattice-continuous.
+
+
+\bibliographystyle{plain}
+\bibliography{article}
+
+\end{document}
