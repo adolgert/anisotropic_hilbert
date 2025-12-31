@@ -175,8 +175,8 @@ static void sort_axes_by_priority(const int *m, int n, int *order)
   {
     axis_exp_t key = items[i];
     int j = i - 1;
-    while (j >= 0 && (items[j].exp > key.exp ||
-                      (items[j].exp == key.exp && items[j].axis > key.axis)))
+    while (j >= 0 && (items[j].exp < key.exp ||
+                      (items[j].exp == key.exp && items[j].axis < key.axis)))
     {
       items[j + 1] = items[j];
       j--;
@@ -213,14 +213,14 @@ static bool build_active_axes(const int *m, int n, hilbert_curve_t *curve)
   sort_axes_by_priority(m, n, curve->axes_ordered);
   curve->k_level[0] = 0;
 
-  int axis_idx = 0;
+  int axis_idx = n;
   for (int s = 1; s <= mmax; s++)
   {
-    while (axis_idx < n && m[curve->axes_ordered[axis_idx]] < s)
+    while (axis_idx > 0 && m[curve->axes_ordered[axis_idx - 1]] < s)
     {
-      axis_idx++;
+      axis_idx--;
     }
-    curve->k_level[s] = n - axis_idx;
+    curve->k_level[s] = axis_idx;
   }
 
   return true;
@@ -277,9 +277,7 @@ hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n)
     assert(k != 0);
 
     uint32_t mask = mask_bits((uint32_t)k);
-    int first_axis = n - k;
-    const int *A = curve.axes_ordered + first_axis;
-    plane = gather_plane(point, A, k, s);
+    plane = gather_plane(point, curve.axes_ordered, k, s);
     pre = affine_apply_inv(plane, st.e, st.d, (uint32_t)k);
     w = gray_decode_axis0(pre, (uint32_t)k) & mask;
 
@@ -289,23 +287,13 @@ hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n)
     uint32_t entry = child_entry(w, k) & mask;
     st.e = affine_apply(entry, st.e, st.d, (uint32_t)k);
     st.d = (st.d + child_dir(w, (uint32_t)k)) % (uint32_t)k;
-
-    int next_k = curve.k_level[s - 1];
-    if (next_k > k)
-    {
-      int k_shift = next_k - k;
-      st.e <<= k_shift;
-      st.d += (uint32_t)k_shift;
-    }
   }
 
   int k = curve.k_level[1];
   assert(k != 0);
 
   uint32_t mask = mask_bits((uint32_t)k);
-  int first_axis = n - k;
-  const int *A = curve.axes_ordered + first_axis;
-  plane = gather_plane(point, A, k, 1);
+  plane = gather_plane(point, curve.axes_ordered, k, 1);
   pre = affine_apply_inv(plane, st.e, st.d, (uint32_t)k);
   w = gray_decode_axis0(pre, (uint32_t)k) & mask;
 
@@ -339,28 +327,18 @@ void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point)
     assert(k != 0);
 
     uint32_t mask = mask_bits((uint32_t)k);
-    int first_axis = n - k;
-    const int *A = curve.axes_ordered + first_axis;
 
     bit_pos -= k;
     w = (uint32_t)((h >> bit_pos) & (hindex_t)mask);
 
     g = gray_code_axis0(w, (uint32_t)k);
     plane = affine_apply(g, st.e, st.d, (uint32_t)k);
-    scatter_plane(point, A, k, s, plane);
+    scatter_plane(point, curve.axes_ordered, k, s, plane);
 
     /* State update for next level */
     uint32_t entry = child_entry(w, k) & mask;
     st.e = affine_apply(entry, st.e, st.d, (uint32_t)k);
     st.d = (st.d + child_dir(w, (uint32_t)k)) % (uint32_t)k;
-
-    int next_k = curve.k_level[s - 1];
-    if (next_k > k)
-    {
-      int k_shift = next_k - k;
-      st.e <<= k_shift;
-      st.d += (uint32_t)k_shift;
-    }
   }
 
   /* Last level (s = 1): no state update needed afterward */
@@ -368,15 +346,13 @@ void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point)
   assert(k != 0);
 
   uint32_t mask = mask_bits((uint32_t)k);
-  int first_axis = n - k;
-  const int *A = curve.axes_ordered + first_axis;
 
   bit_pos -= k;
   w = (uint32_t)((h >> bit_pos) & (hindex_t)mask);
 
   g = gray_code_axis0(w, (uint32_t)k);
   plane = affine_apply(g, st.e, st.d, (uint32_t)k);
-  scatter_plane(point, A, k, 1, plane);
+  scatter_plane(point, curve.axes_ordered, k, 1, plane);
 }
 
 uint64_t hilbert_affine_encode_64(const coord_t *point, const int *m, int n)
@@ -429,21 +405,13 @@ static inline void toggle_scatter_delta(coord_t *point,
 
 static inline hilbert_state_t state_after_digit(hilbert_state_t st,
                                                 uint32_t w,
-                                                int k,
-                                                int k_next)
+                                                int k)
 {
   const uint32_t mask = mask_bits((uint32_t)k);
   const uint32_t entry = child_entry(w, (uint32_t)k) & mask;
 
   st.e = affine_apply(entry, st.e, st.d, (uint32_t)k);
   st.d = (st.d + child_dir(w, (uint32_t)k)) % (uint32_t)k;
-
-  if (k_next > k)
-  {
-    const int shift = k_next - k;
-    st.e <<= shift;
-    st.d += (uint32_t)shift;
-  }
   return st;
 }
 
@@ -476,7 +444,7 @@ void hilbert_affine_decode_domain_stack(const int *m, int n,
   for (int s = L; s >= 1; --s)
   {
     const int k = curve.k_level[s];
-    const int *A = curve.axes_ordered + (n - k);
+    const int *A = curve.axes_ordered;
 
     const uint32_t g = gray_code_axis0(w[s], (uint32_t)k);
     const uint32_t new_plane = affine_apply(g, st_stack[s].e, st_stack[s].d, (uint32_t)k);
@@ -484,7 +452,7 @@ void hilbert_affine_decode_domain_stack(const int *m, int n,
     plane[s] = new_plane;
     scatter_plane(p, A, k, s, new_plane);
 
-    st_stack[s - 1] = state_after_digit(st_stack[s], w[s], k, curve.k_level[s - 1]);
+    st_stack[s - 1] = state_after_digit(st_stack[s], w[s], k);
   }
 
   emit(index++, p, n, ctx);
@@ -510,7 +478,7 @@ void hilbert_affine_decode_domain_stack(const int *m, int n,
     for (int s = s0; s >= 1; --s)
     {
       const int k = curve.k_level[s];
-      const int *A = curve.axes_ordered + (n - k);
+      const int *A = curve.axes_ordered;
 
       const uint32_t g = gray_code_axis0(w[s], (uint32_t)k);
       const uint32_t new_plane = affine_apply(g, st_stack[s].e, st_stack[s].d, (uint32_t)k);
@@ -519,7 +487,7 @@ void hilbert_affine_decode_domain_stack(const int *m, int n,
       toggle_scatter_delta(p, A, k, s, delta);
 
       plane[s] = new_plane;
-      st_stack[s - 1] = state_after_digit(st_stack[s], w[s], k, curve.k_level[s - 1]);
+      st_stack[s - 1] = state_after_digit(st_stack[s], w[s], k);
     }
 
     emit(index++, p, n, ctx);
