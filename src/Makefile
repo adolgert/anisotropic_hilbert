@@ -26,7 +26,7 @@ TARGET = libanisotropic_hilbert$(LIBEXT)
 SRC = anisotropic_hilbert.c
 OBJ = $(SRC:.c=.o)
 
-.PHONY: all clean test refine_pi_test test_affine test_affine_verbose test_affine_lean test_compare test_gray test_general test_general_verbose test_hdf5 generate_fast_tables test_fast_tables
+.PHONY: all clean test refine_pi_test test_affine test_affine_verbose test_affine_lean test_compare test_gray test_general test_general_verbose test_hdf5 generate_fast_tables test_fast_tables test_hamilton
 
 all: $(TARGET)
 
@@ -47,7 +47,7 @@ quicktest: $(TARGET)
 	python3 -c "from anisotropic_hilbert_c import encode, decode; print('C library loaded'); p = decode(0, (2,2)); print(f'decode(0, (2,2)) = {p}')"
 
 clean:
-	rm -f $(TARGET) $(OBJ) hilbert_affine.o hilbert_ffi.o test_hilbert_affine test_hilbert_affine_lean test_hilbert_general refine_pi_test generate_gray.o generate_gray_test tables_hdf5.o test_tables_hdf5 test_hilbert_tables.h5 generate_fast_tables test_fast_tables_verify test_fast.h5 test_random.h5 setup_hilbert.o hilbert_tables.h5
+	rm -f $(TARGET) $(OBJ) hilbert_affine.o hilbert_ffi.o test_hilbert_affine test_hilbert_affine_lean test_hilbert_general refine_pi_test generate_gray.o generate_gray_test tables_hdf5.o test_tables_hdf5 test_hilbert_tables.h5 generate_fast_tables test_fast_tables_verify test_fast.h5 test_random.h5 setup_hilbert.o hilbert_tables.h5 hamilton.o hilbert_general.o test_hamilton hamilton_metrics haverkort_metrics bounding_box_stats range_query_clustering
 
 # Build and run the refine_pi self-test harness.
 refine_pi_test: refine_pi.c
@@ -130,6 +130,31 @@ test_fast_tables: generate_fast_tables test_fast_tables_verify
 
 test_fast_tables_verify: test_fast_tables_verify.c tables_hdf5.o
 	$(CC) $(CFLAGS) $(HDF5_CFLAGS) -o $@ $^ $(HDF5_LIBS)
+
+# ---------------------------------------------------------------------------
+# Hamilton's Compact Hilbert Index (with bug) - for metrics comparison
+# ---------------------------------------------------------------------------
+
+hamilton.o: hamilton.c hamilton.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+test_hamilton: test_hamilton.cpp hamilton.c hamilton.h
+	$(CXX) $(CXXFLAGS) -o $@ test_hamilton.cpp
+
+hamilton_metrics: hamilton_metrics.c hamilton.c hamilton.h
+	$(CC) $(CFLAGS) -o $@ hamilton_metrics.c -lm
+
+hilbert_general.o: hilbert_general.c setup_hilbert.h
+	$(CC) $(CFLAGS) $(HDF5_CFLAGS) -c -o $@ $<
+
+haverkort_metrics: haverkort_metrics.c haverkort_metrics.h hamilton.o hilbert_general.o setup_hilbert.o tables_hdf5.o
+	$(CC) $(CFLAGS) $(HDF5_CFLAGS) -o $@ haverkort_metrics.c hamilton.o hilbert_general.o setup_hilbert.o tables_hdf5.o $(HDF5_LIBS) -lm
+
+bounding_box_stats: bounding_box_stats.c hamilton.o hilbert_general.o setup_hilbert.o tables_hdf5.o
+	$(CC) $(CFLAGS) $(HDF5_CFLAGS) -o $@ bounding_box_stats.c hamilton.o hilbert_general.o setup_hilbert.o tables_hdf5.o $(HDF5_LIBS) -lm
+
+range_query_clustering: range_query_clustering.c hamilton.o hilbert_general.o setup_hilbert.o tables_hdf5.o
+	$(CC) $(CFLAGS) $(HDF5_CFLAGS) -o $@ range_query_clustering.c hamilton.o hilbert_general.o setup_hilbert.o tables_hdf5.o $(HDF5_LIBS) -lm
 
 # Show compiler info
 info:

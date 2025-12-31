@@ -6,6 +6,8 @@
 \usepackage{booktabs}       % For nice tables
 \usepackage{array}
 \usepackage{graphicx}
+\graphicspath{{figures/}}
+\DeclareGraphicsExtensions{.pdf,.png,.jpg}
 \usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{enumitem}       % For customized lists
@@ -62,6 +64,7 @@
 \newcommand{\order}{m_{\text{max}}}
 \newcommand{\dk}{dk}
 \newcommand{\embed}{\kappa}
+\newcommand{\brgc}{BRGC}
 % Sets
 \newcommand{\Z}{\mathbb{Z}}                    % Integers
 \newcommand{\N}{\mathbb{N}}                    % Natural numbers
@@ -87,591 +90,162 @@ We prove this construction yields a lattice-continuous mapping for arbitrary dim
 \end{abstract}
 \section{Introduction}
 
-Space-filling curves are fundamental to combinatorial optimization and multidimensional indexing. For Compact Hilbert indices:
-\begin{itemize}
-    \item Mesh refinement requires adjacency.
-    \item Vision transformers (ViT) and image flattening for AI.
-    \item 3D point cloud analysis for 3D LiDAR data.
-    \item Efficient nearest-neighbor search. This is used in vector databases like Pinecone or Milvus that power modern RAG. Eg., Approximate nearest neighbor or Hilbert R-trees.
-    \item Malware classification (visual analysis) - Researchers convert binary executables into images to train CNNs for malware detection.
-    \item Adaptive mesh refinement in CFD/Physics. Libraries like libMesh use CHC concepts to reorder mesh elements in memory in order to improve cache locality.
-    \item Genome Sequence Analysis - DNA sequences have arbitrary lengths. For comparison, CHC allows projecting multi-dimensional k-mer frequencies into 1D arrays.
-\end{itemize}
-
-
-\begin{center}
-\begin{tikzpicture}[scale=1.2]
-    \draw[step=1, gray, very thin] (0,0) grid (4,2);
-    % A valid Hilbert-like path
-    \draw[thick, blue, ->]
-        (0.5,0.5) -- (0.5,1.5) -- (1.5,1.5) -- (1.5,0.5) --
-        (2.5,0.5) -- (2.5,1.5) -- (3.5,1.5) -- (3.5,0.5);
-    \foreach \x/\y/\n in {0.5/0.5/0, 0.5/1.5/1, 1.5/1.5/2, 1.5/0.5/3,
-                          2.5/0.5/4, 2.5/1.5/5, 3.5/1.5/6, 3.5/0.5/7} {
-        \node at (\x,\y) [circle, fill=blue!20, inner sep=2pt] {\tiny \n};
-    }
-    \node at (2, -0.5) {A valid path through a $4 \times 2$ grid};
-\end{tikzpicture}
-\end{center}
-\begin{center}
-\begin{tikzpicture}[scale=1.2]
-    \draw[step=1, gray, very thin] (0,0) grid (4,2);
-    % A valid Hilbert-like path
-    \draw[thick, blue, ->]
-        (0.5,0.5) -- (1.5,0.5) -- (1.5,1.5) -- (0.5,1.5);
-    \draw[thick, blue, ->]
-        (2.5,0.5) -- (3.5,0.5) -- (3.5,1.5) -- (2.5,1.5);
-    \draw[thick, orange, ->]
-        (0.5,1.5) -- (2.5,0.5);
-    \foreach \x/\y/\n in {0.5/0.5/0, 1.5/0.5/1, 1.5/1.5/2, 0.5/1.5/3,
-                          2.5/0.5/4, 3.5/0.5/5, 3.5/1.5/6, 2.5/1.5/7} {
-        \node at (\x,\y) [circle, fill=blue!20, inner sep=2pt] {\tiny \n};
-    }
-    \node at (2, -0.5) {Compact Hilbert Indices for a $4 \times 2$ grid};
-\end{tikzpicture}
-\end{center}
-
-Existing compact linearizations for unequal dimensions fail to preserve lattice continuity (adjacency), degrading locality.
-$$
-    ||x-y||_1 = 1 \implies ||H(x)-H(y)||_1=1
-$$
-\begin{definition}[Lattice Continuity]
-A space-filling curve $H: \mathcal{D} \to \mathbb{Z}$ is lattice-continuous if for any two points $p, q \in \mathcal{D}$ with Euclidean distance $||p-q||_1 = 1$, the difference in their index $|H(p) - H(q)|$ is minimal.
-\end{definition}
-
-This continuity can be helpful for
-\begin{itemize}
-    \item Using Hilbert curves to define bounding boxes.
-    \item Using Hilbert curves for locality... I'll need to measure this.
-    \item Using space-filling curves for CNC milling and laser cutting or for 3D printing.
-    \item Data compression with change codes that encode only the next step direction.
-    \item Image processing with the Riemersma dithering technique. You get jumps.
-    \item Topological algorithms that detect connected components, as in ``find all connected cloud pixels''. Standard Hilbert also fragments regions, but lack of lattice continuity complicates stitching.
-\end{itemize}
-(There are Scan-line and Gilgamesh variants that are used for arbitrary rectangles for CNC.)
-
-We introduce a general construction using Gray codes and affine transformations in $\mathbb{F}_2^n$.
-We prove this construction yields a lattice-continuous mapping for arbitrary dimension extents and provide an $O(mn)$ time/space algorithm.
-
-
-\section{Preliminaries}
-Hilbert curves are traditionally built using nested sequences of $n$-dimensional
-cubes. The space of the binary Galois Field $V_k=\mathbf{F}_2^k$ is a natural fit.
-It is equipped with an XOR for addition, which we label $\vplus$ and
-an AND for multiplication, which we label $\vtimes$.
-
-Critical to the Hilbert construction are Gray codes which are Hamiltonian
-paths on the corners of the $k$-dimensional cube $Q_k\{0,1\}^k\cong\mathbf{F}_2^k$.
-We can consider a Gray code a transform from $G:\mathbf{F}_2^k\rightarrow \mathbf{F}_2^k$
-if we convert integers $\mathcal{I}_n=\mathbb{Z}_{2^k}$ using natural binary
-code $B:\mathcal{I}_n\rightarrow V_k$.
-We restrict ourselves to Gray codes that start at the origin of $V_k$ and
-map the last index $2^{n-1}$ to the axis $\epsilon_0$\cite{alber2000multidimensional}.
-
-A binary Gray code guarantees that only one index changes at a time.
-$$
-    G(B(i))\XOR G(B(i+1)) = \epsilon_{g(i)}
-$$
-
-Consider a point in $n$-dimensions where each dimension has extent $2^m$.
-A Hilbert curve defines a bijection $\mathcal{H}: (\mathbb{Z}_{2^m})^n\rightarrow \mathbb{Z}_{2^{nm}}$. The order of the curve is $m$.
-We consider Hilbert curves that map $0$ to $\mathbf{0}$ and $2^{mn}$ to $(2^m-1)\epsilon_0$ along the 0-axis.
-
-Definition. A Gray code $G: {0,\ldots,2^k-1} \to {0,\ldots,2^k-1}$ satisfies: $$G(i) \oplus G(i+1) = 2^{g(i)} \text{ for some } g(i) \in {0,\ldots,k-1}$$
-\section{Construction of Hilbert Curves}
-
-\subsection{Introduction}
-While there are many Hilbert curves\cite{haverkort2016many}, we will consider
-only constructions that follow a nested compositional framework across $m$ levels. This framework addresses each level as a partitioning of the space
-into a dyadic cube $Q_k$ and for each partitioning requires two definitions.
-\begin{enumerate}
-    \item A Gray code as described above.
-    \item A set of affine transforms to apply to every element of $Q_k$ at the next level.
-\end{enumerate}
-The Gray code assures adjacency at this level. The affine transforms rotate
-child Gray codes so that, were they to assure adjacency within the child,
-they would remain adjacent.
-Gray codes can be generated by construction\cite{haverkort2016many}, by induction\cite{hamilton2008compact}, by permutation languages (cite), or by search. (The file hypercubes\_lec10.pdf has references I may need to cite.)
-
-The set of affine transforms has often been found by symmetry considerations.
-We offer an algorithm here to enumerate the allowed affine transforms that
-result in a lattice-continuous Hilbert curve.
-
-While a general permutation of a child is possible, we are concerned with
-ensuring that the child's Gray code, which we have required to have
-an origin at $0$ and an exit at $\epsilon_0$, is oriented in a particular
-direction. The possible orientations on $Q_k$ are enumerated by all
-rotations and translations, as shown below, which allows us to focus on
-affine transformations using a cyclic rotation $\rho^d$ of axes by $d$ and translation by $e$.
-$$
-    S_{e,d}(y) = \rho^d y + e
-$$
-
-Theorem (Characterization): A nested construction using Gray code $G$ and orientation sequence ${(e_i, d_i)}{i=0}^{2^n-1}$ produces a lattice-continuous Hilbert curve if and only if for all $i \in [0, 2^n-2]$: $$
-\epsilon{d_i} + e_i + e_{i+1} = G(i)
-$$
-
-Definition (Orientation Sequence). An orientation sequence for a 
-$k$-dimensional Hilbert curve is a sequence ${(e_i, d_i)}_{i=0}^{2^k-1}$
-where $e_i \in \mathbb{F}_2^k$ is the entry corner and
-$d_i \in \mathbb{Z}_k$ is the exit direction of the $i$-th subcube. Definition (Exit Corner).
-$$
-f_i = e_i \oplus 2^{d_i}
-$$
- 
-Theorem 3.1 (Gluing Constraint — Necessity and Sufficiency). An orientation sequence produces a lattice-continuous Hilbert curve if and only if for all $i \in {0, \ldots, 2^k-2}$:
-$$e_{i+1} = e_i \oplus 2^{d_i} \oplus 2^{g(i)}$$
-where $g(i)$ is the Gray step axis at position $i$. Equivalently: $e_{i+1} = f_i \oplus 2^{g(i)}$ (exit of child $i$ and entry of child $i+1$ differ along the Gray axis). Proof of Sufficiency. (This is the main content) Lemma 3.2 (Oriented Gray Sequence). For fixed $(e,d)$, define:
-$$
-u(i) = T^{-1}_{(e,d)}(\mathrm{gc}(i))
-$$
-Then $u(i) \oplus u(i+1) = 2^{g'(i)}$ for some axis $g'(i)$. (Follows from adjacency preservation.) Lemma 3.3 (Child Endpoint Gluing). If the gluing constraint holds, then $f_i$ and $e_{i+1}$ are adjacent cube corners (differ in exactly one bit). Lemma 3.4 (Dyadic Boundary Step). If two adjacent $k$-cubes in a $2^k$ grid share a face along axis $j$, then the exit corner of one and entry corner of the other (both on that shared face) correspond to lattice points differing by exactly 1 in coordinate $j$. Theorem 3.5 (Lattice Continuity). Combining: every step in the traversal is a unit $L^1$ step.
- 
-Proof of Necessity. If the constraint fails at some $i$, then $f_i$ and $e_{i+1}$ differ in $\neq 1$ bit, so the seam step has $L^1$ distance $\neq 1$.
-
-\subsection{Affine transforms and rotations}
-\begin{theorem}
-Let $n \ge 1$. The set of affine transforms $\{S_{e,d} : e \in \mathbb{F}_2^n,\, d \in \mathbb{Z}_n\}$
-is in bijection with the set of directed edges of the $n$-dimensional hypercube.
-\end{theorem}
-
-\begin{proof}
-Let $V = \mathbb{F}_2^n$ be the vector space over $\mathbb{F}_2$ with standard basis
-$\{\mathbf{e}_0, \ldots, \mathbf{e}_{n-1}\}$.
-The vertices of the $n$-cube are the elements of $V$, and two vertices are adjacent
-if and only if they differ by some $\mathbf{e}_a$.
-
-A \emph{directed edge} is an ordered pair $(u, u + \mathbf{e}_a)$ where $u \in V$ and $a \in \mathbb{Z}_n$.
-
-\medskip
-\noindent\textbf{Counting.}
-There are $2^n$ choices for $u$ and $n$ choices for $a$, giving $n \cdot 2^n$ directed edges.
-There are $2^n$ choices for $e$ and $n$ choices for $d$, giving $n \cdot 2^n$ transforms.
-
-\medskip
-\noindent\textbf{The transform.}
-Let $\rho \in \mathrm{Sym}(\mathbb{Z}_n)$ be the cyclic permutation $\rho(a) = (a+1) \bmod n$,
-acting on $V$ by $(\rho \cdot v)(a) = v(\rho^{-1}(a))$.
-Then $\rho \cdot \mathbf{e}_j = \mathbf{e}_{(j+1) \bmod n}$.
-
-Define $S_{e,d} : V \to V$ by
-$$
-S_{e,d}(x) = \rho^{d} \cdot x + e.
-$$
-The inverse is $S_{e,d}^{-1}(y) = \rho^{-d} \cdot (y + e)$.
-
-\medskip
-\noindent\textbf{Reference edge.}
-Fix the directed edge $R = (\mathbf{0}, \mathbf{e}_{0})$ as the reference.
-Under $S_{e,d}$:
-\begin{align*}
-S_{e,d}(\mathbf{0}) &= e, \\
-S_{e,d}(\mathbf{e}_{0}) &= \mathbf{e}_{d} + e.
-\end{align*}
-Thus $S_{e,d}$ maps $R$ to the directed edge from $e$ along axis $d$.
-
-\medskip
-\noindent\textbf{Surjectivity.}
-Given any directed edge $(u, u + \mathbf{e}_a)$, choose
-$$
-e = u, \qquad d = a.
-$$
-Then $S_{e,d}(R) = (u, u + \mathbf{e}_a)$.
-
-For the reverse orientation $(u + \mathbf{e}_a, u)$, choose
-$$
-e = u + \mathbf{e}_a, \qquad d = a.
-$$
-Then:
-\begin{align*}
-S_{e,d}(\mathbf{0}) &= u + \mathbf{e}_a, \\
-S_{e,d}(\mathbf{e}_{0}) &= (u + \mathbf{e}_a) + \mathbf{e}_a = u.
-\end{align*}
-
-\medskip
-\noindent\textbf{Injectivity.}
-The map $S_{e,d} \mapsto S_{e,d}(R)$ sends distinct pairs $(e, d)$ to distinct
-directed edges, since $e$ determines the starting vertex and $d$ determines the axis.
-
-\medskip
-\noindent\textbf{Conclusion.}
-The map $S_{e,d} \mapsto S_{e,d}(R)$ is a bijection between
-$\{S_{e,d}\}$ and directed edges of the $n$-cube.
-\end{proof}
-
-\begin{lemma}[Interpretation for Hilbert curves]
-The state $(e, d)$ of a Hilbert curve encodes exactly the information needed to specify
-an entry vertex and an exit direction. The bijection above shows this encoding is tight:
-no redundancy, no missing configurations.
-\end{lemma}
-
-\subsection{Finding Correct Transforms}
-
-Need to search a graph defined on the space of $4^n$ vertices, but it's
-along the Hamiltonian path.
-
-We phrase seam conditions in terms of entry and exit of subcubes, but
-we can't construct a graph through all subcube vertices because it would
-lead to solutions that are mutiple steps within a subcube. That's OK.
-We can elide over subcube steps by stepping from one subcube exit to the
-next subcube exit. Then when we find paths go back and iterate over
-ways to reach one exit from the other.
-
-\begin{enumerate}
-\item For each vertex in the space of cubes of cubes
-    \begin{enumerate}
-        \item If that vertex neighbors the child of the next parent.
-        \item Add a directed edge to this vertex from all neighbors that
-        are one unit vector away and are NOT neighbors of children of the next parent.
-    \end{enumerate}
-    \item Add an edge from the origin to every neighbor one unit vector away.
-    \item Find all paths from the origin to the exit at $(3,0,\ldots,0)$.
-    \item Choose a path and for every vertex in that path, create a new graph.
-    \begin{enumerate}
-        \item Search all edges from the exit of one child
-        \item Search the neighbors of those edges to find the exit to the next child.
-        \item Add paths for every combination that connects those two. 
-    \end{enumerate}
-    \item Find all paths in this graph. Each one defines a set of entry and directions.
-\end{enumerate}
-How many paths are there? A lot. I don't know how many.
-
-\begin{algorithm}
-\caption{Derive child-entry corners and exit directions for a 2-level $4^n$ curve}
-\begin{algorithmic}[1]
-\Require Dimension $n$; parent Gray order $g[0..2^n!-!1]\subset GF(2)^n$ with $g[0]=0$
-\Ensure Tables $\mathrm{entry}[w]\in \mathrm{GF}(2)^n$, $\mathrm{dir}[w]\in\{0,\dots,n-1\}$
-
-\State Define $V := \{0,1,2,3\}^n$
-\State For each $x\in V$, write $x = 2h(x)+\ell(x)$ with $h(x),\ell(x)\in\mathrm{GF}(2)^n$
-\State Compute $\mathrm{rank}:\mathrm{GF}(2)^n\to\{0,\dots,2^n-1\}$ s.t.\ $\mathrm{rank}(g[w])=w$
-\State Define layer index $w(x) := \mathrm{rank}(h(x))$
-\State $s \gets (0,\dots,0)$ \Comment{start vertex in $V$}
-\State $f \gets (3g[2^n\!-\!1]_0,\dots,3g[2^n\!-\!1]_{n-1})$ \Comment{finish corner in $V$}
-
-\State Define $\mathrm{Exit}(x)$ to be true iff $x=f$ or $\exists y\sim x$ with $w(y)=w(x)+1$
-\State Initialize directed graph $G$ on vertex set $V$
-
-\ForAll{$x\in V$ with $\mathrm{Exit}(x)$ and $w(x)<2^n-1$}
-  \ForAll{$y\sim x$ with $w(y)=w(x)+1$} \Comment{cross into next cube}
-    \ForAll{$z\sim y$ with $w(z)=w(y)$ and $\mathrm{Exit}(z)$} \Comment{one internal hop to an exit}
-      \State Add directed edge $x\to z$ to $G$
-    \EndFor
-  \EndFor
-\EndFor
-
-\State Add edges $s\to z$ for all $z\sim s$ with $w(z)=0$ and $\mathrm{Exit}(z)$
-\State Find a directed path $P=(s,X_0,X_1,\dots,X_{2^n-1})$ in $G$ with $X_{2^n-1}=f$
-\If{no such $P$ exists} \State \textbf{fail} \EndIf
-
-\State Set $\mathrm{entry}[0]\gets \ell(s)$
-\For{$w=0$ \textbf{to} $2^n-1$}
-  \If{$w>0$}
-    \State $d \gets \text{index of the $1$ in } g[w-1]\oplus g[w]$
-    \State $E_w \gets \text{the unique neighbor of }X_{w-1}\text{ in cube }w \text{ across axis }d$
-    \State $\mathrm{entry}[w]\gets \ell(E_w)$
-  \EndIf
-  \State $\ell_{\mathrm{out}}\gets \ell(X_w)$
-  \State $t \gets \mathrm{entry}[w]\oplus \ell_{\mathrm{out}}$
-  \State $\mathrm{dir}[w]\gets \text{index of the $1$ in }t$ \Comment{require $\mathrm{wt}(t)=1$}
-\EndFor
-
-\Return $(\mathrm{entry},\mathrm{dir})$
-\end{algorithmic}
-\end{algorithm}
-
-And the improvement:
-% Requires:
-% \usepackage{algorithm}
-% \usepackage{algorithmic}
-
-\begin{algorithm}
-\caption{Two-level $4^n$ child-entry/exit tables via mismatch-state DP in $\mathrm{GF}(2)^n$}
-\label{alg:gf2-dp}
-\begin{algorithmic}[1]
-\Require Dimension $n\ge 2$; parent Gray sequence $g_0,\dots,g_{2^n-1}\in\mathrm{GF}(2)^n$ with $g_0=0$
-\Ensure Child entry corners $\ell^{\mathrm{in}}_w\in\mathrm{GF}(2)^n$ and exit directions $\mathrm{dir}_w\in\{0,\dots,n-1\}$ for $w=0,\dots,2^n-1$
-
-\State $N\gets 2^n$, \quad $m\gets N-1$
-\For{$w\gets 0$ \textbf{to} $m-1$}
-  \State Let $d_w$ be the unique index such that $g_{w+1}=g_w\oplus e_{d_w}$
-\EndFor
-
-\State Define mismatch state $s_w := g_w \oplus \ell^{\mathrm{in}}_w \in \mathrm{GF}(2)^n$
-\State Initialize reachable set $R_0\gets\{0\}$ and predecessor map $\pi(\cdot)\gets\bot$
-
-\For{$w\gets 0$ \textbf{to} $m-1$}
-  \State $R_{w+1}\gets\emptyset$
-  \ForAll{$s\in R_w$}
-    \For{$a\gets 0$ \textbf{to} $n-1$}
-      \State $s' \gets s\oplus e_a$ \Comment{$s_{w+1}=s_w\oplus e_{\mathrm{dir}_w}$}
-      \If{$(s')_{d_w}=1$} \Comment{face constraint for crossing cube $w\to w+1$}
-        \If{$s'\notin R_{w+1}$}
-          \State $R_{w+1}\gets R_{w+1}\cup\{s'\}$
-          \State $\pi(w+1,s')\gets (s,a)$
-        \EndIf
-      \EndIf
-    \EndFor
-  \EndFor
-\EndFor
-
-\State Choose any $s_{m}\in R_m$ with Hamming weight $1$
-\State Backtrack with $\pi$ to recover $s_0,\dots,s_m$ and $a_0,\dots,a_{m-1}$
-\For{$w\gets 0$ \textbf{to} $m$}
-  \State $\ell^{\mathrm{in}}_w \gets g_w \oplus s_w$
-  \State $\mathrm{dir}_w \gets a_w$ \Comment{for $w<m$}
-\EndFor
-\State $\mathrm{dir}_m \gets \text{index of the 1-bit of } s_m$ \Comment{last cube ends at local corner $g_m$}
-
-\Return $\{\ell^{\mathrm{in}}_w,\mathrm{dir}_w\}_{w=0}^{m}$
-\end{algorithmic}
-\end{algorithm}
-
-
-\subsection{Algorithm to Find Points and Indices}
-
-Algorithm for point-to-index (not a surprise).
-\begin{algorithm}
-\caption{Point to Index}
-\label{alg:point-to-index}
-\begin{algorithmic}[1]
-\Require Point $p$
-\Ensure Point $p\in P_n$.
-
-\State $(e, d) \gets (0,0)$
-
-\For{$s = m_{\max}$ \textbf{downto} $1$}
-    \If{$s < m_{\max}$}
-        \State $(e_0, d_0)\gets \mu(w, k)$ \Comment{Table lookup of Hilbert rule.}
-        \State $(e, d)\gets (S_{e,d}(e_0, d_0), d+d_0\mod k)$ \Comment{Compose transforms}
-    \EndIf
-    \State $i=\text{gather\_plane}(p, k, s)$ \Comment{Extract level from dims}
-    \State $w = G^{-1}(S_{e,d}^{-1}(i, k))$ \Comment{Transform to rank}
-    \State $h = S_{k,w}(h)$ \Comment{Include in index}
-\EndFor
-\Return $h$
-\end{algorithmic}
-\end{algorithm}
-
-Algorithm for index-to-point (not a surprise).
-\begin{algorithm}
-\caption{Index to Point}
-\label{alg:index-to-point}
-\begin{algorithmic}[1]
-\Require Index $h$
-\Ensure Index $h\in [0,\ldots,2^{mn}-1]$.
-
-\State $(e, d) \gets (0,0)$
-
-\For{$s = m_{\max}$ \textbf{downto} $1$}
-    \If{$s < m_{\max}$}
-        \State $(e_0, d_0)\gets \mu(w, k)$ \Comment{Table lookup of Hilbert rule.}
-        \State $(e, d)\gets (S_{e,d}(e_0, d_0), d+d_0\mod k)$ \Comment{Compose transforms}
-    \EndIf
-    \State $i=\text{gather\_plane}(p, k, s)$ \Comment{Extract level from dims}
-    \State $w = G^{-1}(S_{e,d}^{-1}(i, k))$ \Comment{Transform to rank}
-    \State $h = S_{k,w}(h)$ \Comment{Include in index}
-\EndFor
-\Return $h$
-\end{algorithmic}
-\end{algorithm}
-
-Algorithm for next-index, which can generate a sequence of points in $O(1)$ time by recalculating transforms only as needed. (Maybe this is nice.
-Has anybody done this before?)
-\begin{algorithm}
-\caption{Neighbor Index with Cached State}
-\label{alg:neighbor}
-\begin{algorithmic}[1]
-\Require Cached decode state for $h_0 \to p_0$: entry states $(e^{(s)}, d^{(s)})$, digits $w^{(s)}$, active axes $A_s$, point $p_0$
-\Require Neighbor axis $j$ and direction $\delta \in \{-1, +1\}$
-\Ensure Hilbert index $h_1 = H(p_0 + \delta \cdot \epsilon_j)$, or $\bot$ if out of bounds
-
-\State $p'_j \gets p_{0,j} + \delta$
-\If{$p'_j < 0$ or $p'_j \geq 2^{m_j}$}
-    \Return $\bot$ \Comment{Out of bounds}
-\EndIf
-
-\State $\textit{changed} \gets p_{0,j} \XOR p'_j$ \Comment{Which bits differ}
-\State $s^* \gets \max\{s : \text{bit } (s{-}1) \text{ of } \textit{changed} \text{ is set and } j \in A_s\}$
-
-\State $h_1 \gets 0$
-\For{$s = m_{\max}$ \textbf{downto} $s^* + 1$} \Comment{Copy unchanged high digits}
-    \State $h_1 \gets (h_1 \SHL k_s) \OR w^{(s)}$
-\EndFor
-
-\State $(e, d) \gets (e^{(s^*)}, d^{(s^*)})$ \Comment{Restore cached entry state}
-
-\For{$s = s^*$ \textbf{downto} $1$} \Comment{Recompute from $s^*$ down}
-    \State $\ell \gets 0$
-    \For{$t = 0$ \textbf{to} $k_s - 1$} \Comment{Pack level-$s$ bits of neighbor}
-        \State $a \gets A_s[t]$
-        \State $c \gets \begin{cases} p'_j & \text{if } a = j \\ p_{0,a} & \text{otherwise} \end{cases}$
-        \State $\ell \gets \ell \OR (\bitfn(c, s{-}1) \SHL t)$
-    \EndFor
-    \State $w \gets \gc^{-1}(T_{(e,d)}(\ell))$ \Comment{Encode: transform and Gray decode}
-    \State $h_1 \gets (h_1 \SHL k_s) \OR w$
-    \State $e \gets e \XOR \mathrm{rotL}(\entry(w), d{+}1, k_s)$ \Comment{Update state}
-    \State $d \gets (d + \dir(k_s, w) + 1) \mod k_s$
-    \If{$s > 1$ and $k_{s-1} > k_s$} \Comment{Embed if axes activate}
-        \State $(e, d) \gets \mathrm{Embed}(A_s, A_{s-1}, e, d)$
-    \EndIf
-\EndFor
-\Return $h_1$
-\end{algorithmic}
-\end{algorithm}
-
-\section{Affine Embedding Framework}
-\begin{itemize}
-\item Level $s \in {1, \ldots, m_{\max}}$
-\item Active axis set $A_s = {j : m_j \geq s}$
-\item $k_s = |A_s|$
-\end{itemize}
-
-We start with a Hilbert curve for which we know that
-$$
-S^k_w(\alpha_w + \epsilon_0) + S^k_{w+1}\alpha_{w+1} = \epsilon^k_g
-$$
-Here the $k$ subscript says that the curve is defined in $k$ dimensions.
-
-Given a transform specified by $e$ and $d$, we apply it during encoding with
-$$
-    w = \gc^{-1}(S^{-1(k)}_{e,d}(p))
-$$
-The transform $S^{-1(k)}_{e,d}(p)$ is an affine transform on a point $p$ in the $V_n$
-space. The forward transform is a rotation and then an additon.
-$$
-    S^{(k)}_{e,d}(w) = \rho^d w + e
-$$
-The reverse is the opposite.
-$$
-    S^{-1(k)}_{e,d}(p) = \rho^{-d}(p + e)
-$$
-In $k$ dimensions a rotation is defined on $V_n$ as a rotation of the indices,
-$a$, in the opposite direction.
-$$
-    \rho \nu(a) = \nu(\rho^{-1} a)
-$$
-
-Define a coordinate embedding transform.
-$$
-  \embed_{\dk}: Q_k\rightarrow Q_{k+\dk},\quad \embed_{\dk}(x_0,\ldots,x_{n-1})=(0,\ldots,0,x_0,\ldots,x_k-1)
-$$
-This identifies $Q_k$ with the face
-$$
-    F := \{y\in Q_{k+\dk}:y_0=\cdots=y_{\dk-1}=0\subseteq Q_{k+\dk} \}
-$$
-Because this embedding is linear over $\mathbb{F}_2$,
-$$
-    \embed_{\dk}\nu\vplus \embed_{\dk}\upsilon = \embed_{\dk}(\nu\vplus\upsilon),
-$$
-applying embedded transforms to the embedded adjacency gives a transformed
-constitutive equation.
-$$
-    \hat{S}_{i}^{(k+\dk)}\embed_{\dk}\epsilon_0 \vplus
-    \hat{S}_{i+1}^{(k+\dk)}\embed_{\dk}\mathbf{0} = \embed_{\dk}g_k(i)
-$$
-
-When embedding state $(e, d)$ from $k$ to $k+\delta$ dimensions:
-Embed $e$ by placing bits on the same physical axes
-Embed $d$ by preserving the axis label: if $d$ pointed to axis $A_s[d]$, find its new index in $A_{s-1}$
-Theorem 4.1 (Embedded Gluing Constraint). If $(e_i, d_i)$ satisfies the gluing constraint in $k$ dimensions, then the embedded sequence $(\kappa(e_i), d_i + \delta)$ satisfies the gluing constraint in $k + \delta$ dimensions, provided the Gray code is also embedded consistently. Proof. Your current §5 content, but now with the axis-label-preservation invariant made explicit. The key equation:
-$$
-\epsilon_{d_i + \delta} + \rho^{\delta} e_i + \rho^{\delta} e_{i+1} = \rho^{\delta} g_k(i)
-$$
-shows the constraint is preserved under embedding.
-
-\section{Lattice Continuity of the Construction}
-
-
-If I take an affine transform in $k$ dimensions put it into $k+\dk$ dimensions
-by modifying $e$ and $d$ by putting $e$ as the high bits of a $k+\dk$ dimensional
-vector and modify $d$ by increasing it by $\dk$. The embedded
-transform $S'_{e',d'}$ acts on a $(k+\dk)$-bit vector $x$ as:
-$$
-S'_{e',d'}(x) = \rho^{d + \dk}x \oplus (\rho^{\dk}e)
-$$
-The new axes occupy positions $0, 1, \ldots, \dk-1$, while the original $k$
-axes shift to positions $\dk, \dk+1, \ldots, k+\dk-1$. Since the new
-axes have entry bit 0 (from the left-shift) and the rotation increases by $\dk$,
-the transform acts as identity on the new low-order bits while preserving the original
-transform's action on the high-order bits.
-
-
-Remember that we assume $\epsilon_{d_i}+ e_{i}+e_{i+1} = g_k(i)$. When we
-modify them as above,
-$$
-\begin{aligned}
-    \alpha_i & = S'_i(\mathbf{0})=\rho^{\dk}e_i \\
-    \omega_i & = S'_i(\mathbf{0} + \epsilon_0)=
-        \rho^{d_i + \dk}\epsilon_0 + \rho^{\dk}e_{i}
-        =\epsilon_{d_i+ \dk}+ \rho^{\dk} e_{i} \\
-    \alpha_{i+1} & = \rho^{\dk}e_{i+1}
-\end{aligned}
-$$
-In the $k+\dk$ dimensions this becomes:
-$$
-\begin{aligned}
-    \omega_i + \alpha_{i+1} & = g_{(k)}(i) \\
-    \epsilon_{d_i+ \dk}+ \rho^{\dk} e_{i}+\rho^{\dk}e_{i+1} & = \rho^{\dk}g_{(k)}(i)
-\end{aligned}
-$$
-In other words, by embedding the transform that defines the child space,
-we are guaranteed adjacency in that larger child space as long as the Gray step
-from in the child space is an embedded version of the Gray step in the parent space.
-
-This equation needs to apply for those indices that are used for this level,
-and these are only the high $k$ active axes out of the $k+dk$ total axes. The $i$
-at this level is assigned by the parent, so it runs over $[0,2^k-1]$, but that's
-all that is needed during axis activation.
-
-The final agreement we need is that, in the child layer, we need to be able to
-define orientations for the children such that our boundary conditions are met
-for the layer above. That is that there is an entry at the origin and an exit
-at $\epsilon_0$.
-
-For each child hypercube of the level with $k+\dk$ active dimensions, we can
-use the next Gray code in the given class $\gc_{k+\dk}$.
-
-\section{An Algorithm}
-It's $\mathcal{O}(nm)$ where $n$ is the number
-of dimensions and each dimension has extent $2^m$. If you consider
-bit operations as handling the $n$, then it is $\mathcal{O}(m)$.
-
-
-\begin{algorithm}[H]
-\caption{Encode: Point $\to$ Hilbert Index}
-\begin{algorithmic}[1]
-\Require Point $\mathbf{p} \in P(\mathbf{m})$
-\Ensure Hilbert index $h \in \{0, \ldots, 2^M - 1\}$
-\State $h \gets 0$
-\State $e \gets 0$, $d \gets 0$ \Comment{Initial state: standard orientation}
-\State Compute $A_s$ for all $s$ \Comment{Active axes sorted by $(m_j, j)$}
-\For{$s = m_{\max}$ down to $1$}
-    \State $k \gets k_s$ \Comment{Number of active axes at level $s$}
-    \State $\ell \gets \sum_{t=0}^{k-1} \bitfn(p_{A[t]}, s-1) \cdot 2^t$ \Comment{Pack bits from active axes}
-    \State $\bar{\ell} \gets T_{(e,d)}(k, \ell)$ \Comment{Apply orientation transform}
-    \State $w \gets \gcinv(\bar{\ell})$ \Comment{Convert to sub-hypercube index}
-    \State Append $w$ to $h$ \Comment{$h \gets h \cdot 2^k + w$}
-    \State $e \gets e \XOR (\entry_k(w) \ROTL (d+1))$
-    \State $d \gets (d + \dir_k(w) + 1) \mod k$
-
-    \If{$k_{s-1} > k$} \Comment{Activation event: new axes become active}
-        \State $(e', d') \gets \mathrm{Embed}_{A_s \to A_{s-1}}(e, d)$
-    \EndIf
-\EndFor
-\State \Return $h$
-\end{algorithmic}
-\end{algorithm}
-
 \section{Experimental Validation}
 
-Here is the change to the spatial locality\cite{moon2001analysis}.
+\begin{table}[htbp]
+\centering
+\caption{Hilbert Curve Variants for Experiments}
+\label{tab:curve-variants}
+\begin{tabular}{c p{3cm} c c c p{3cm}}
+\hline
+Label & Construction & Gray code & Transforms & Lattice continuous & Notes \\
+\hline
+Hamilton-CHI & Removal of inactive indices & \brgc & Hamilton's $T_{e,d}$ & No & Algorithm from Hamilton and Rao-Chaplin~\cite{hamilton2008compact}. \\
+\hline
+LC-BRGC & This article & \brgc & Tabular & Yes & Uses \brgc but solves for the transforms \\
+\hline
+LC-Balanced & This article & Balanced & Tabular & Yes & The best known variant for locality \\
+\hline
+LC-Random & This article & Random & Tabular & Yes & As a robustness check \\
+\hline
+\end{tabular}
+\end{table}
 
-Gotsman-Lindenbaum Metric\cite{gotsman1996metric}.
+\begin{table}[htbp]
+\centering
+\caption{Selected Domains for Experiments}
+\label{tab:domains}
+\begin{tabular}{lrrrrr}
+\hline
+Domain ID & $m=(m_x,m_y)$ & Grid size & Aspect Ratio & Total bits $M$ & Points $N=2^M$ \\
+\hline
+D0 & (9,9) & 512 x 512 & 1 : 1 & 18 & 262,144 \\
+D1 & (11, 7) & 2048 x 128 & 16 : 1 & 18 & 262,144 \\
+D2 & (12, 6) & 4096 x 64 & 64 : 1 & 18 & 262,144 \\
+D3 & (13, 5) & 8192 x 32 & 256 : 1 & 18 & 262,144 \\
+\hline
+\end{tabular}
+\end{table}
 
-Box-to-curve ratio (BCR)\cite{haverkort2010locality,bos2015hyperorthogonal}.
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{discontinuities_by_perimeter_2d}
+\caption{Size of the largest discontinuity by perimeter for 2D domains for Compact Hilbert Indices
+from Hamilton and Rao-Chaplin~\cite{hamilton2008compact}.}
+\label{fig:discontinuities-perimeter-2d}
+\end{figure}
 
-Here is the change to the bounding box problem\cite{kamel1994hilbert}.
+\begin{table}[htbp]
+\centering
+\label{tab:locality-metrics}
+\begin{tabular}{llrrrr}
+\toprule
+Domain & Aspect & Hamilton $\mathrm{WL}_\infty$ & LC-CHI $\mathrm{WL}_\infty$ & Hamilton WBA & LC-CHI WBA \\
+\midrule
+$512 \times 512$   & 1:1   & 4.75 & 4.75  & 2.29 & 2.29 \\
+$2048 \times 128$  & 16:1  & 442  & 4.75  & 435  & 2.29 \\
+$4096 \times 64$   & 64:1  & 384  & 7.62  & 416  & 2.29 \\
+$8192 \times 32$   & 256:1 & 512  & 26.2  & 528  & 2.33 \\
+\bottomrule
+\end{tabular}
+\caption{Worst-case locality metrics for Hamilton-CHI and LC-BRGC across rectangular domains.
+Key metrics: $\mathrm{WL}_\infty$ (Chebyshev locality), $\mathrm{WL}_2$ (Euclidean locality),
+$\mathrm{WL}_1$ (Manhattan locality), WBA (bounding box area ratio), WBP (bounding box perimeter ratio).}
+\end{table}
+
+
+\begin{table}[htpb]
+\centering
+\label{tab:bounding-box-stats}
+\begin{tabular}{llrrrrr}
+\toprule
+Domain & Curve & Block size $B$ & Mean $\frac{\text{bbox}}{B}$ & P95 $\frac{\text{bbox}}{B}$ & Max $\frac{\text{bbox}}{B}$ & Max $\frac{\text{peri}}{\sqrt{B}}$ \\
+\midrule
+512$\times$512 & Hamilton & 32 & 1 & 1 & 1 & 4.24 \\
+ & LC-BRGC & 32 & 1 & 1 & 1 & 4.24 \\
+ & Hamilton & 100 & 1.35 & 1.68 & 1.92 & 5.6 \\
+ & LC-BRGC & 100 & 1.35 & 1.68 & 1.92 & 5.6 \\
+ & Hamilton & 500 & 1.41 & 1.79 & 2.05 & 5.72 \\
+ & LC-BRGC & 500 & 1.41 & 1.79 & 2.05 & 5.72 \\
+ & Hamilton & 1024 & 1 & 1 & 1 & 4 \\
+ & LC-BRGC & 1024 & 1 & 1 & 1 & 4 \\
+\addlinespace
+2048$\times$128 & Hamilton & 32 & 1 & 1 & 1 & 4.24 \\
+ & LC-BRGC & 32 & 1 & 1 & 1 & 4.24 \\
+ & Hamilton & 100 & 2.33 & 1.68 & 174.08 & 52.8 \\
+ & LC-BRGC & 100 & 1.35 & 1.68 & 1.92 & 5.6 \\
+ & Hamilton & 500 & 2.43 & 2.05 & 40.96 & 25.76 \\
+ & LC-BRGC & 500 & 1.41 & 1.79 & 2.05 & 5.72 \\
+ & Hamilton & 1024 & 1 & 1 & 1 & 4 \\
+ & LC-BRGC & 1024 & 1 & 1 & 1 & 4 \\
+\addlinespace
+4096$\times$64 & Hamilton & 32 & 1 & 1 & 1 & 4.24 \\
+ & LC-BRGC & 32 & 1 & 1 & 1 & 4.24 \\
+ & Hamilton & 100 & 2.38 & 1.92 & 51.2 & 28.8 \\
+ & LC-BRGC & 100 & 1.35 & 1.68 & 1.92 & 5.6 \\
+ & Hamilton & 500 & 2.45 & 10.24 & 10.24 & 12.88 \\
+ & LC-BRGC & 500 & 1.4 & 1.79 & 2.05 & 5.72 \\
+ & Hamilton & 1024 & 1 & 1 & 1 & 4 \\
+ & LC-BRGC & 1024 & 1 & 1 & 1 & 4 \\
+\addlinespace
+8192$\times$32 & Hamilton & 32 & 1 & 1 & 1 & 4.24 \\
+ & LC-BRGC & 32 & 1 & 1 & 1 & 4.24 \\
+ & Hamilton & 100 & 2.39 & 12.8 & 12.8 & 14.4 \\
+ & LC-BRGC & 100 & 1.34 & 1.68 & 1.92 & 5.6 \\
+ & Hamilton & 500 & 2.31 & 4.1 & 4.1 & 8.59 \\
+ & LC-BRGC & 500 & 1.49 & 2.05 & 2.05 & 5.72 \\
+ & Hamilton & 1024 & 1 & 1 & 1 & 4 \\
+ & LC-BRGC & 1024 & 1 & 1 & 1 & 4 \\
+\bottomrule
+\end{tabular}
+\caption{This is the “indexing application” table. It is more intuitive than 
+WBA/WBP
+WBA/WBP and more directly tied to how SFCs are used to build blocks (e.g., R-tree leaves). Haverkort motivates this style of evaluation by grouping consecutive points into blocks and measuring block bounding boxes. Computation: deterministic (no sampling) if you just partition the full curve into consecutive blocks of size B. Report both average and max because seam jumps tend to show up in the max/tails.}
+\end{table}
+
+\begin{table}[htpb]
+\centering
+\label{tab:range-query}
+\begin{tabular}{lrrrrl}
+\toprule
+Curve & Query window & Mean clusters & P95 clusters & Max clusters & Method \\
+\midrule
+Hamilton & 4$\times$4 & 3.97 & 6 & 7 & exhaustive (249,673) \\
+LC-BRGC & 4$\times$4 & 3.97 & 6 & 6 & exhaustive (249,673) \\
+LC-Balanced & 4$\times$4 & 3.97 & 6 & 6 & exhaustive (249,673) \\
+LC-Random & 4$\times$4 & 3.97 & 6 & 6 & exhaustive (249,673) \\
+\addlinespace
+Hamilton & 8$\times$8 & 7.92 & 13 & 14 & exhaustive (233,073) \\
+LC-BRGC & 8$\times$8 & 7.94 & 13 & 14 & exhaustive (233,073) \\
+LC-Balanced & 8$\times$8 & 7.94 & 13 & 14 & exhaustive (233,073) \\
+LC-Random & 8$\times$8 & 7.94 & 13 & 14 & exhaustive (233,073) \\
+\addlinespace
+Hamilton & 16$\times$16 & 15.83 & 26 & 29 & exhaustive (199,969) \\
+LC-BRGC & 16$\times$16 & 15.85 & 26 & 26 & exhaustive (199,969) \\
+LC-Balanced & 16$\times$16 & 15.85 & 26 & 26 & exhaustive (199,969) \\
+LC-Random & 16$\times$16 & 15.85 & 26 & 26 & exhaustive (199,969) \\
+\addlinespace
+Hamilton & 64$\times$4 & 33.64 & 53 & 55 & exhaustive (246,013) \\
+LC-BRGC & 64$\times$4 & 33.56 & 54 & 59 & exhaustive (246,013) \\
+LC-Balanced & 64$\times$4 & 33.56 & 54 & 59 & exhaustive (246,013) \\
+LC-Random & 64$\times$4 & 33.56 & 54 & 59 & exhaustive (246,013) \\
+\addlinespace
+Hamilton & 4$\times$64 & 32.06 & 52 & 60 & exhaustive (4,093) \\
+LC-BRGC & 4$\times$64 & 31.99 & 51 & 51 & exhaustive (4,093) \\
+LC-Balanced & 4$\times$64 & 31.99 & 51 & 51 & exhaustive (4,093) \\
+LC-Random & 4$\times$64 & 31.99 & 51 & 51 & exhaustive (4,093) \\
+\addlinespace
+Hamilton & 32$\times$32 & 31.47 & 50 & 54 & exhaustive (134,145) \\
+LC-BRGC & 32$\times$32 & 31.57 & 50 & 53 & exhaustive (134,145) \\
+LC-Balanced & 32$\times$32 & 31.57 & 50 & 53 & exhaustive (134,145) \\
+LC-Random & 32$\times$32 & 31.57 & 50 & 53 & exhaustive (134,145) \\
+\bottomrule
+\end{tabular}
+\caption{This is a range query, done by exhaustive enumeration. This counts the number of clusters within a query window, but it doesn't count the size
+of the gaps, so it doesn't differentiate strongly between breaks in locality
+and large adjacency skips~\cite{moon2001analysis}.}
+\end{table}
+
 
 \section{Conclusion}
 We have a new algorithm to find Hilbert curves.

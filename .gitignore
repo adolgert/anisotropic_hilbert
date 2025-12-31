@@ -61,3 +61,8 @@ src/test_fast_tables_verify
 src/test_tables_hdf5
 src/generate_fast_tables
 comments/20251229d_article_no_cross_requirement/article_clean_revised.pdf
+src/test_hamilton
+src/bounding_box_stats
+src/hamilton_metrics
+src/haverkort_metrics
+src/range_query_clustering
