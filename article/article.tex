@@ -88,7 +88,294 @@ Existing compact linearizations for unequal dimensions fail to preserve lattice 
 We introduce a general construction using Gray codes and affine transformations in $\mathbb{F}_2^n$.
 We prove this construction yields a lattice-continuous mapping for arbitrary dimension extents and provide an $O(mn)$ time algorithm.
 \end{abstract}
+
 \section{Introduction}
+
+Space-filling curves are fundamental.
+
+Recent interest in Hilbert curves: mesh refinement,
+combinatorial optimization, multidimensional indexing. Use in AI.
+They rely on continuity and search for better locality~\cite{franco2025pareto}.
+
+Problems with unequal axes stem from presentation of gluing constraints.
+Nice work in \cite{alber2000multidimensional}.
+
+Locality depends on particular choice of Hilbert curve~\cite{haverkort2010locality}.
+Would like to expand ability to use different Hilbert curves.
+
+I don't love counting and staring at things when they are in $n$-dimensions.
+Use $\mathbb{F}_2^n$ to stop staring.
+
+
+
+\subsection{Hyperrectangle}
+Let dimensions $n\ge 1$ and extents $\mathbf{m}=(m_0,\ldots,m_{n-1})\in \mathbb{N}^n$ define a hyperrectangle.
+$$
+  P_n(\mathbf{m})=\prod_{j=0}^{n-1}\left\{0,1,\ldots,2^{m_j}-1\right\}
+$$
+The sum of extents is $M=\sum_{j=0}^{n-1}m_j$.
+
+\subsection{Lattice-continuous Hilbert Curve}
+
+\begin{definition}[Lattice-continuous index]
+  A bijection $H: P_n(\mathbf{m})\rightarrow \{0,1,\ldots,2^M-1\}$
+  between a \emph{point} in $P(\mathbf{m})$ and an \emph{index} in $\mathbb{Z}$
+  is \emph{lattice-continuous} if $||H^{-1}(t)-H^{-1}(t+1)||_1$
+  for all $t\in\{0,1,\ldots,2^M-2\}$.
+\end{definition}
+
+The \emph{order} of a Hilbert curve is $m=\max(\mathbf{m})$.
+
+\subsection{Binary Hypercube}
+Recursive algorithms for Hilbert curves partition each level using
+binary hypercubes.
+
+For $k\ge 1$, let $V_k=\mathbb{F}_2^k$ and identify it with the vertex
+set of the $k$-dimensional hypercube $Q_k$. This space is equipped with
+addition $\vplus$ and multiplication $\vtimes$ which correspond to
+an XOR and AND operation on bit representations.
+
+Vertices $u,v\in V_k$ are adjacent if $u\oplus v \in \{\mathbf{e}_0,\ldots,\mathbf{e}_{k-1}\}$ where $\mathbf{e}_j$ is a unit vector along the $j$ axis.
+
+
+\subsection{Affine automorphisms and orientations}
+
+A map $A : V_k\rightarrow V_k$ is an \emph{affine automorphism} of $Q_k$
+if it is of the form $A(x)=Px\vplus a$ where $P$ is a coordinate permutation
+matrix over $\mathbf{F}_2^k$ and $a\in V_k$. Affine automorphisms preserve adjacency.
+
+If we restrict $A$ to cyclic rotations of axes, $\rho$, then the set of
+transformations
+$$
+T_{e,d}(y)=\rho^d y \vplus e
+$$
+where $d\in \mathbb{Z}$ and $e\in V_k$ can transform any directed edge in $Q_k$
+to any other directed edge.
+
+Note that this definition of $T_{e,d}$ differs from that of Hamilton and
+Rao-Chaplin becuase it rotates by $d$ rather than $d+1$.
+
+\subsection{Binary Gray Codes}\label{sec:binary-gray}
+
+A binary Gray code is a Hamiltonian path on $Q_k$ for $k\ge 1$. We represent
+a Gray code as a bijection
+$$
+  G_k : \{0,1,\ldots,2^k-1\}\rightarrow V_k \quad R_k : V_k\rightarrow \{0,1,\ldots,2^k-1\}
+$$
+with $R_k=G_k^{-1}$ the rank of a point in $Q_k$. In $V_k$, there is a unique
+axis
+$$
+  G_k(w) + G_k(w+1)=\mathbf{e}_{\sigma_k(w)}.
+$$
+
+The Hilbert algorithm will use the Gray code rank to determine the visiting
+order within a hypercube. Of particular interest are the rank~$0$ and rank~$2^k-1$
+elements of the hypercube because they determine adjacency as shown in Sec.~XXX.
+
+There are many Gray codes but the rank~$2^k-1$ exit point will always be adjacent
+to the rank~$0$ entry point according to Alber and Niedermeier~\cite{alber2000multidimensional}. It will be convenient to assume the boundary conditions
+$$
+  G_k(0)=\mathbf{0} \quad G_k(2^k-1)=\mathbf{e}_0.
+$$
+
+The best-known Gray code, used by Butz and Hamilton among others~\cite{butz2006alternative,hamilton2006compact}, is the \emph{binary-reflected Gray code} (\brgc). This Gray code has closed-form expressions for $G_k$ and $R_k$.
+It's first element is at the origin, but its last element is in $\mathbf{e}_{k-1}$,
+so we will consider it rotated by one, using $T_{\mathbf{0},-1}$, to meet the boundary conditions.
+This rotation of the \brgc is a common, if implicit, assumption that can show up as a $+1$ in
+initial conditions and later transformations~\cite{hamilton2008compact}.
+
+
+\subsection{Bit plane decomposition}
+
+We decompose the space $P(\mathbf{m})$ into levels $s\in \{m, m-1,\ldots,1\}$.
+The level-$s$ bit-plane vector is the $(s-1)$-th bit of each coordinate of the
+point in $P$.
+The space of each level is $V_k$ where $k = |\{j : m_j \ge s\}| \le n$.
+It is in this space, which defines how we recursively decompose the domain
+of a Hilbert curve, that we define Gray codes and orient child levels.
+
+
+\section{Gluing in $4^k$}
+The key is connecting orientation and adjacency.
+
+A lattice-continuous Hilbert curve relies on continuity across decomposition
+levels.
+
+\subsection{high + low}
+Consider a point domain of order $m=2$. Identify the level~2 decomposition
+with a high bit $h\in V_2$ and the level~1 decomposition with a low bit
+$\ell\in V_2$. We can make a map from $(V_2\times V_2) \rightarrow P_k(2)$.
+$$
+x = 2h +\ell \quad h,\ell \in V_k
+$$
+Rank the high bits with a Gray code so that the sequence
+$h_w=R_k(w)$ for $w\in\{0,\ldots,2^k\}$
+traverses all of the $2^k$ cubes in $P_k(2)$. Let $d_w\coloneq \sigma_k(w)$
+so that $h_{w+1}=h_w\vplus \mathbf{e}_{d_w}$.
+
+\subsection{entry + exit}
+Our recursive construction means that, for a child hypercube, defined by having a fixed high bit $h_w$,
+the low bit will itself traverse a Gray code, which guarantees lattice continuity
+within the child.
+
+There will be an entry and exit vertex for the $2^k$ points within the child domain.
+As described in Sec.~\ref{sec:binary-gray}, the exit corner is a unit step $a_w$ from
+the entrance corner. In the context of $P_k(2)$, we consider them in coordinate space.
+$$
+  \ell_w^{\text{out}} \coloneq \ell_w^{\text{in}}\vplus \mathbf{e}_{a_w}
+$$
+
+\subsection{gluing constraint}
+
+Crossing from cube \(h_w\) to cube \(h_{w+1}=h_w\vplus\mathbf{e}_{d_w}\) happens across the shared face in axis \(d_w\).
+In \((h,\ell)\)-coordinates, the unique lattice adjacency across that face flips both the high and low bits in axis \(d_w\).
+Therefore, lattice continuity across the seam forces
+\begin{equation}\label{eq:seam}
+(h_{w+1},\ell^{\mathrm{in}}_{w+1}) = (h_w\vplus\mathbf{e}_{d_w},\;\ell^{\mathrm{out}}_w\vplus\mathbf{e}_{d_w}).
+\end{equation}
+Equivalently, in low-bit coordinates:
+\begin{equation}\label{eq:glue-low}
+\ell^{\mathrm{in}}_{w+1} = \ell^{\mathrm{in}}_w \vplus \mathbf{e}_{a_w} \vplus \mathbf{e}_{d_w}.
+\end{equation}
+
+\begin{lemma}[Mismatch-state form]\label{lem:mismatch}
+Define the \emph{mismatch state} \(s_w\in V_k\) by
+\begin{equation}\label{eq:mismatch}
+ s_w \coloneqq h_w \vplus \ell^{\mathrm{in}}_w.
+\end{equation}
+Then \eqref{eq:glue-low} is equivalent to the pair of constraints
+\begin{align}
+ s_{w+1} &= s_w \vplus \mathbf{e}_{a_w}, \label{eq:s-walk}\\
+ (s_{w+1})_{d_w} &= 1. \label{eq:s-face}
+\end{align}
+\end{lemma}
+
+\begin{proof}
+Using \eqref{eq:parent-step} and \eqref{eq:glue-low},
+\[
+\begin{aligned}
+ s_{w+1}
+ &= h_{w+1}\vplus \ell^{\mathrm{in}}_{w+1}
+ = (h_w\vplus\mathbf{e}_{d_w}) \vplus (\ell^{\mathrm{in}}_w\vplus\mathbf{e}_{a_w}\vplus\mathbf{e}_{d_w})
+ = (h_w\vplus\ell^{\mathrm{in}}_w)\vplus\mathbf{e}_{a_w}
+ = s_w\vplus\mathbf{e}_{a_w},
+\end{aligned}
+\]
+which is \eqref{eq:s-walk}.
+For \eqref{eq:s-face}, note that \eqref{eq:seam} implies the seam vertex \((h_{w+1},\ell^{\mathrm{in}}_{w+1})\) lies on the shared face in axis \(d_w\), i.e. its low bit in axis \(d_w\) equals \(1-(h_{w+1})_{d_w}\).
+Equivalently,
+\((\ell^{\mathrm{in}}_{w+1})_{d_w} \vplus (h_{w+1})_{d_w} = 1\), which is \((s_{w+1})_{d_w}=1\).
+\end{proof}
+
+Lemma \ref{lem:mismatch} reduces the two-level gluing problem to a constrained walk on the hypercube \(Q_k\): at step \(w\), choose any neighbor \(s_{w+1}\) of \(s_w\) such that coordinate \(d_w\) of \(s_{w+1}\) is \(1\).
+
+Recall that in Hamilton and Rao-Chaplin, the child walk is on $Q_{k-1}$
+because of symmetry of the \brgc. We can show how to derive that
+walk\dots
+
+\subsection{existence}
+Does a path in always exist? Yes! It's not hard to find, actually.
+
+\subsection{dynamic program}
+
+\section{Construction}
+\subsection{induction on gluing}
+
+Once you have a path for $s_w$ it defines a set of transforms $\tau_w$
+for the child hypercubes such that the entry and exit within the child's
+space $V'_n$ orient to the parent's space $V_n$.
+$$
+  \ell_w^{\text{in}}=\tau_w \mathbf{0}\quad \ell_w^{\text{in}}=\tau_w \mathbf{e}_0
+$$
+A suffient set of transforms $\tau_w$ is the set of orientations of directed
+edges above, $T_{e,d}$, where we can determine the unknown parameters $(e,d)$.
+$$
+\begin{aligned}
+  \rho^d \mathbf{0} + e & = \ell_w^{\text{in}}\\
+  \rho^d \mathbf{e}_0 + e & = \ell_w^{\text{out}}
+\end{aligned}
+$$
+The result is that $e=\ell_w^{\text{in}}$ and $d=a_w=\ell_w^{\text{in}}+\ell_w^{\text{out}}$. We now have a new map from $(V_2\times V'_2) \rightarrow P(2)$.
+$$
+x = 2h + T_{e_w,d_w}(\ell) \quad h\in V_k, \ell\in V'_k
+$$
+where $w=R_k(h)$. The transform $T_{e_w,d_w}$ maps the child space into the
+parent space.
+
+Above we used boundary conditions to determine a valid path through $P_k(2)$.
+They are that the first rank is the origin and the last rank is $(4,0,\ldots)$.
+That shows that a two-level construction keeps the boundary conditions of a
+correct one-level construction.
+
+\subsection{Encode and decode for equal side lengths}
+
+This is a recursive algorithm that starts at the level $s=m$ and progresses
+to level $s=1$. The state at each level is defined by the
+current bit plane and the transform $T_{e_s,d_s}$.
+
+Start with the identity as the transform. Extract the bit plane $b_s$ for level $s$ from
+input coordinates $p$. Transform them with $b'_s=T^{-1}_{e_s,d_s}(b_s)$. Rank them with $w_s=R(b'_s)$. Scatter that rank $w$ into the Hilbert index at $\rho^{m*(s-1)}w$.
+Update the transform for the next level down so it conforms to the curve,
+$$
+T_{e_{s-1},d_{s-1}}=T_{e_w,d_w}T_{e_s,d_s}
+$$
+This is equivalent to $e_{s-1}=\rho^d e_s + e_w$ and $d_{s-1}=d_s + d_w$.
+
+Decoding is similar. The recursion and state are the same. At each level,
+extract from the Hilbert index the rank, $w_s$ for this level. Find the coordinate
+with $b'_s=G(w_s)$. Convert that to the local coordinates with $T_{e_w,d_w}$,
+and scatter the resulting coordinate in $V_k$ into the $s-1$ bit of the
+point coordinates. Finally, update the transform state for the level below.
+
+\subsection{Unequal high + low}
+
+What happens when we have unequal side lengths? In this recursive description,
+the higher levels will have fewer dimensions, as few as $k=1$. Before, we
+presented a two-level model for $P_k(2)$. Imagine now we have $k$ dimensions
+at level $s$ and $k-dk$ levels at dimension $s-1$. The low bits will be
+$\ell\in V_{k+dk}$.
+
+We can choose an embedding for the high bits, $\kappa_s : V_k \rightarrow V_{k+dk}$.
+If we previously had a two-level curve, we now act on both sides of Eq.~XXX
+with the embedding.
+$$
+\kappa_s x = 2\kappa_s h + \kappa_s T_{e_w,d_w}(\kappa^{-1}_s\ell) \quad h\in V_k, \ell\in V'_{k+dk}
+$$
+Here, $\kappa_s^{-1}$ is the left-inverse of $\kappa_s$. In order to match
+boundary conditions, we require that $\kappa_s^{-1}\mathbf{0}_{k+dk}=\mathbf{0}_{k}$
+and that $\kappa_s^{-1}\mathbf{e}_{0,k+dk}=\mathbf{e}_{0,k}$. This may require
+rotation of axes.
+
+\subsection{Unequal encode and decode}
+
+You can imagine the case where the extents are $(2,3,2)$ so that at level
+$s=2$ the origin at the lower level is in $e_0$ in $V_3$ whereas the origin
+at the parent level naturally at $e_1$ in $V_3$.
+
+There is a convenient solution to the bookkeeping. At the start of the
+calculation, order axes so that $m_0<m_1<\cdots m_{n-1}$. This way the
+embedding won't shift the boundary conditions at $\mathbf{0}$ and $\mathbf{e}_0$
+because the axis at 0 stays active.
+
+This does, however, mean that the algorithm for unequal side lengths has a 
+different embedding operator. Whereas before for equal sides the operator
+was $T^k_{e_w,d_w}$ it is now $T^{k+ds}_{e_w,d_w}$ which is the same offset now
+embedded in the larger space and the same amount of circular rotation but embedded
+into the larger space.
+
+There is otherwise no change to the algorithm.
+
+\subsection{Next index}
+
+It is tremendously valuable to be able to map a whole domain $P_k(\mathbf{m})$
+to its Hilbert indices. That calculation greatly reduces the total amount
+of computation compared to computing each Hilbert index separately.
+
+Maintain a stack of transforms $(e_s,d_s)$ and current rankings $w_s$.
+Walk $w_s$ for each child cube.
+
+This reduces the total computation to about $8+10k$ integer operations per
+index.
 
 \section{Experimental Validation}
 
