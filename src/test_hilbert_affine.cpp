@@ -46,6 +46,10 @@ extern "C" {
     hindex_t hilbert_affine_encode(const coord_t *point, const int *m, int n);
     void hilbert_affine_decode(hindex_t h, const int *m, int n, coord_t *point);
     int hilbert_affine_index_bits(const int *m, int n);
+
+    typedef void (*hilbert_emit_fn)(hindex_t h, const coord_t *p, int n, void *ctx);
+    void hilbert_affine_decode_domain_stack(const int *m, int n,
+                                            hilbert_emit_fn emit, void *ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -437,6 +441,137 @@ static bool test_exhaustive_4d(const HilbertImpl& impl) {
     return all_pass;
 }
 
+// ---------------------------------------------------------------------------
+// Iterator (domain_stack) verification
+// ---------------------------------------------------------------------------
+
+struct IteratorTestCtx {
+    const int* m;
+    int n;
+    bool failed;
+    hindex_t fail_h;
+    std::vector<uint32_t> fail_expected;
+    std::vector<uint32_t> fail_got;
+};
+
+static void iterator_check_callback(hindex_t h, const coord_t* p, int n, void* ctx) {
+    IteratorTestCtx* tc = (IteratorTestCtx*)ctx;
+    if (tc->failed) return;  // Already failed, skip remaining
+
+    // Decode using standard function
+    std::vector<uint32_t> expected(n);
+    hilbert_affine_decode(h, tc->m, tc->n, expected.data());
+
+    // Compare
+    for (int i = 0; i < n; i++) {
+        if (p[i] != expected[i]) {
+            tc->failed = true;
+            tc->fail_h = h;
+            tc->fail_expected = expected;
+            tc->fail_got.assign(p, p + n);
+            return;
+        }
+    }
+}
+
+static void report_iterator_failure(const int* m, int n, const IteratorTestCtx& ctx) {
+    printf("FAIL: iterator m=");
+    print_shape(m, n);
+    printf(" at h=");
+    print_h128(ctx.fail_h);
+    printf("\n  Expected: ");
+    print_point(ctx.fail_expected.data(), n);
+    printf("\n  Got:      ");
+    print_point(ctx.fail_got.data(), n);
+    printf("\n");
+}
+
+static bool test_iterator_shape(const std::vector<int>& m_vec) {
+    tests_run++;
+
+    const int* m = m_vec.data();
+    int n = (int)m_vec.size();
+
+    log("  Testing iterator m=");
+    if (verbose) {
+        print_shape(m, n);
+        printf(" (%llu points)...", 1ULL << sum_bits(m, n));
+        fflush(stdout);
+    }
+
+    IteratorTestCtx ctx;
+    ctx.m = m;
+    ctx.n = n;
+    ctx.failed = false;
+    ctx.fail_h = 0;
+
+    hilbert_affine_decode_domain_stack(m, n, iterator_check_callback, &ctx);
+
+    if (!ctx.failed) {
+        tests_passed++;
+        log(" OK\n");
+        return true;
+    } else {
+        log(" FAIL\n");
+        report_iterator_failure(m, n, ctx);
+        return false;
+    }
+}
+
+static bool test_iterator_exhaustive_2d() {
+    log("Iterator 2D (exponents 0-5):\n");
+    bool all_pass = true;
+
+    for (int m0 = 0; m0 <= 5; m0++) {
+        for (int m1 = 0; m1 <= 5; m1++) {
+            if (m0 == 0 && m1 == 0) continue;
+            if (!test_iterator_shape({m0, m1})) {
+                all_pass = false;
+            }
+        }
+    }
+
+    return all_pass;
+}
+
+static bool test_iterator_exhaustive_3d() {
+    log("Iterator 3D (exponents 0-4):\n");
+    bool all_pass = true;
+
+    for (int m0 = 0; m0 <= 4; m0++) {
+        for (int m1 = 0; m1 <= 4; m1++) {
+            for (int m2 = 0; m2 <= 4; m2++) {
+                if (m0 == 0 && m1 == 0 && m2 == 0) continue;
+                if (!test_iterator_shape({m0, m1, m2})) {
+                    all_pass = false;
+                }
+            }
+        }
+    }
+
+    return all_pass;
+}
+
+static bool test_iterator_exhaustive_4d() {
+    log("Iterator 4D (exponents 0-3):\n");
+    bool all_pass = true;
+
+    for (int m0 = 0; m0 <= 3; m0++) {
+        for (int m1 = 0; m1 <= 3; m1++) {
+            for (int m2 = 0; m2 <= 3; m2++) {
+                for (int m3 = 0; m3 <= 3; m3++) {
+                    if (m0 == 0 && m1 == 0 && m2 == 0 && m3 == 0) continue;
+                    if (!test_iterator_shape({m0, m1, m2, m3})) {
+                        all_pass = false;
+                    }
+                }
+            }
+        }
+    }
+
+    return all_pass;
+}
+
 #ifdef WITH_LEAN
 // ---------------------------------------------------------------------------
 // Cross-implementation comparison
@@ -697,6 +832,11 @@ int main(int argc, char* argv[]) {
     all_pass &= test_exhaustive_2d(impl);
     all_pass &= test_exhaustive_3d(impl);
     all_pass &= test_exhaustive_4d(impl);
+
+    // Test iterator (domain_stack) against standard decode
+    all_pass &= test_iterator_exhaustive_2d();
+    all_pass &= test_iterator_exhaustive_3d();
+    all_pass &= test_iterator_exhaustive_4d();
 
     printf("========================================\n");
     printf("Results: %d/%d tests passed\n", tests_passed, tests_run);
