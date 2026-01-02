@@ -6,6 +6,7 @@
 \usepackage{booktabs}       % For nice tables
 \usepackage{array}
 \usepackage{graphicx}
+\usepackage{xspace}
 \graphicspath{{figures/}}
 \DeclareGraphicsExtensions{.pdf,.png,.jpg}
 \usepackage{xcolor}
@@ -41,38 +42,38 @@
 % CUSTOM COMMANDS FOR NOTATION
 % ============================================================================
 % Bit operations (matching Hamilton's notation)
-\newcommand{\XOR}{\oplus}           % XOR: exclusive or
-\newcommand{\AND}{\mathbin{\wedge}}            % AND
-\newcommand{\OR}{\mathbin{\vee}}               % OR
-\newcommand{\NOT}{\mathord{\sim}}              % NOT (bitwise complement)
-\newcommand{\SHL}{\mathbin{\triangleleft}}     % Shift left
-\newcommand{\SHR}{\mathbin{\triangleright}}    % Shift right
-\newcommand{\ROTL}{\mathbin{\circlearrowleft}} % Rotate left
-\newcommand{\ROTR}{\mathbin{\circlearrowright}}% Rotate right
-\newcommand{\vplus}{\mathbin{\oplus}}   % plus
-\newcommand{\vtimes}{\mathbin{\otimes}}
+\newcommand{\XOR}{\oplus\xspace}           % XOR: exclusive or
+\newcommand{\AND}{\mathbin{\wedge}\xspace}            % AND
+\newcommand{\OR}{\mathbin{\vee}\xspace}               % OR
+\newcommand{\NOT}{\mathord{\sim}\xspace}              % NOT (bitwise complement)
+\newcommand{\SHL}{\mathbin{\triangleleft}\xspace}     % Shift left
+\newcommand{\SHR}{\mathbin{\triangleright}\xspace}    % Shift right
+\newcommand{\ROTL}{\mathbin{\circlearrowleft}\xspace} % Rotate left
+\newcommand{\ROTR}{\mathbin{\circlearrowright}\xspace}% Rotate right
+\newcommand{\vplus}{\mathbin{\oplus}\xspace}   % plus
+\newcommand{\vtimes}{\mathbin{\otimes}\xspace}
 
 % Convenient shortcuts
-\newcommand{\gc}{g}                  % Gray code function
-\newcommand{\gcinv}{g^{-1}}          % Gray code inverse
-\newcommand{\bitfn}{\mathrm{bit}}              % bit extraction function
-\newcommand{\tsb}{\mathrm{tsb}}                % trailing set bits
-\newcommand{\entry}{e}                % entry point function
-\newcommand{\exitpt}{f}               % exit point function (f for "finish")
-\newcommand{\dir}{d}                  % direction function
-\newcommand{\gcr}{\mathrm{gcr}}                % Gray code rank
-\newcommand{\order}{m_{\text{max}}}
-\newcommand{\dk}{dk}
-\newcommand{\embed}{\kappa}
-\newcommand{\brgc}{BRGC}
+\newcommand{\gc}{g\xspace}                  % Gray code function
+\newcommand{\gcinv}{g^{-1}\xspace}          % Gray code inverse
+\newcommand{\bitfn}{\mathrm{bit}\xspace}              % bit extraction function
+\newcommand{\tsb}{\mathrm{tsb}\xspace}                % trailing set bits
+\newcommand{\entry}{e\xspace}                % entry point function
+\newcommand{\exitpt}{f\xspace}               % exit point function (f for "finish")
+\newcommand{\dir}{d\xspace}                  % direction function
+\newcommand{\gcr}{\mathrm{gcr}\xspace}                % Gray code rank
+\newcommand{\order}{m_{\text{max}}\xspace}
+\newcommand{\dk}{dk\xspace}
+\newcommand{\embed}{\kappa\xspace}
+\newcommand{\brgc}{BRGC\xspace}
 % Sets
-\newcommand{\Z}{\mathbb{Z}}                    % Integers
-\newcommand{\N}{\mathbb{N}}                    % Natural numbers
-\newcommand{\B}{\mathbb{B}}                    % Binary digits {0,1}
+\newcommand{\Z}{\mathbb{Z}\xspace}                    % Integers
+\newcommand{\N}{\mathbb{N}\xspace}                    % Natural numbers
+\newcommand{\B}{\mathbb{B}\xspace}                    % Binary digits {0,1}
 
 % Other
-\newcommand{\encode}{\mathrm{encode}}
-\newcommand{\decode}{\mathrm{decode}}
+\newcommand{\encode}{\mathrm{encode}\xspace}
+\newcommand{\decode}{\mathrm{decode}\xspace}
 
 
 \title{Lattice-Continuous Compact Hilbert Indices via Affine Transformations on Hypercubes}
@@ -106,8 +107,13 @@ Would like to expand ability to use different Hilbert curves.
 I don't love counting and staring at things when they are in $n$-dimensions.
 Use $\mathbb{F}_2^n$ to stop staring.
 
+\begin{itemize}
+  \item Express gluing constaint in $\mathbb{F}_2^n$ for clarity.
+  \item Give a dynamic program to construct valid orientation tables so that it is possible to generate new Hilbert curves quickly for any Gray code.
+  \item Make unequal side lengths on better footing so they are lattice-continuous with less razzle-dazzle.
+\end{itemize}
 
-
+\section{Preliminaries}
 \subsection{Hyperrectangle}
 Let dimensions $n\ge 1$ and extents $\mathbf{m}=(m_0,\ldots,m_{n-1})\in \mathbb{N}^n$ define a hyperrectangle.
 $$
@@ -124,13 +130,17 @@ The sum of extents is $M=\sum_{j=0}^{n-1}m_j$.
   for all $t\in\{0,1,\ldots,2^M-2\}$.
 \end{definition}
 
-The \emph{order} of a Hilbert curve is $m=\max(\mathbf{m})$.
+\begin{definition}[Hilbert curve]
+A Hilbert curve or order $m$ is a lattice-continuous index on $P_n(\mathbf{m})$
+with $m=\max(\mathbf{m})$ and boundary conditions
+$H(\mathbf{0})=0$ and $H((2^{m_j}-1)\mathbf{e}_j)2^M-1$ for some axis $j$.
+\end{definition}
 
 \subsection{Binary Hypercube}
 Recursive algorithms for Hilbert curves partition each level using
 binary hypercubes.
 
-For $k\ge 1$, let $V_k=\mathbb{F}_2^k$ and identify it with the vertex
+For $k\ge 1$, let $V_k=\mathbb{F}_2^k=\{0,1\}^k$ and identify it with the vertex
 set of the $k$-dimensional hypercube $Q_k$. This space is equipped with
 addition $\vplus$ and multiplication $\vtimes$ which correspond to
 an XOR and AND operation on bit representations.
@@ -142,15 +152,20 @@ Vertices $u,v\in V_k$ are adjacent if $u\oplus v \in \{\mathbf{e}_0,\ldots,\math
 
 A map $A : V_k\rightarrow V_k$ is an \emph{affine automorphism} of $Q_k$
 if it is of the form $A(x)=Px\vplus a$ where $P$ is a coordinate permutation
-matrix over $\mathbf{F}_2^k$ and $a\in V_k$. Affine automorphisms preserve adjacency.
+matrix over $\mathbb{F}_2^k$ and $a\in V_k$. Affine automorphisms preserve adjacency.
 
-If we restrict $A$ to cyclic rotations of axes, $\rho$, then the set of
-transformations
+Our main concern, however, will be the orientation of directed edges, where
+a directed edge is a pair of position and direction, $(e\in V_k,d\in \{0,\ldots,k\})$.
+
+\emph{Cyclic affine transformations} consist of a cyclid rotation $\rho$ and
+a translation $e$.
 $$
-T_{e,d}(y)=\rho^d y \vplus e
+T_{e,d}(y)=\rho^d y \vplus e\qquad d\in \mathbb{Z}, e\in V_k
 $$
-where $d\in \mathbb{Z}$ and $e\in V_k$ can transform any directed edge in $Q_k$
-to any other directed edge.
+These can transform any directed edge in $Q_k$ to any other directed edge but
+do not include general permuations. The number of affine automorphisms
+is $2^k\prod_{i=0}^{k-1}(2^k-2^i)$ versus the cyclic affine maps which number
+$k2^k$~\cite{lidl1997finite}. For $k=3$, there are 1344~affine automorphisms and 24~cyclic affine maps.
 
 Note that this definition of $T_{e,d}$ differs from that of Hamilton and
 Rao-Chaplin becuase it rotates by $d$ rather than $d+1$.
@@ -173,12 +188,14 @@ order within a hypercube. Of particular interest are the rank~$0$ and rank~$2^k-
 elements of the hypercube because they determine adjacency as shown in Sec.~XXX.
 
 There are many Gray codes but the rank~$2^k-1$ exit point will always be adjacent
-to the rank~$0$ entry point according to Alber and Niedermeier~\cite{alber2000multidimensional}. It will be convenient to assume the boundary conditions
+to the rank~$0$ entry point according to Alber and Niedermeier~\cite{alber2000multidimensional}. It will be convenient to assume a base frame defined
+by an origin and a primary axis.
 $$
   G_k(0)=\mathbf{0} \quad G_k(2^k-1)=\mathbf{e}_0.
 $$
 
-The best-known Gray code, used by Butz and Hamilton among others~\cite{butz2006alternative,hamilton2006compact}, is the \emph{binary-reflected Gray code} (\brgc). This Gray code has closed-form expressions for $G_k$ and $R_k$.
+The best-known Gray code, used by Butz and Hamilton among others~\cite{butz2006alternative,hamilton2006compact}, is the \emph{binary-reflected Gray code} (\brgc). This Gray code has closed-form expressions for $G_k$ and $R_k$ and is
+\emph{linear} in $V_k$.
 It's first element is at the origin, but its last element is in $\mathbf{e}_{k-1}$,
 so we will consider it rotated by one, using $T_{\mathbf{0},-1}$, to meet the boundary conditions.
 This rotation of the \brgc is a common, if implicit, assumption that can show up as a $+1$ in
@@ -195,11 +212,16 @@ It is in this space, which defines how we recursively decompose the domain
 of a Hilbert curve, that we define Gray codes and orient child levels.
 
 
-\section{Gluing in $4^k$}
+\section{Hilbert curve construction with affine transforms}
 The key is connecting orientation and adjacency.
+
+We could do this with point-free language, but would you believe it?
 
 A lattice-continuous Hilbert curve relies on continuity across decomposition
 levels.
+
+Claim: You can construct a Hilbert curve recursively from a Hilbert curve
+and a Gray code equipped with a set of directed edges in $V_k$.
 
 \subsection{high + low}
 Consider a point domain of order $m=2$. Identify the level~2 decomposition
@@ -238,6 +260,128 @@ Equivalently, in low-bit coordinates:
 \ell^{\mathrm{in}}_{w+1} = \ell^{\mathrm{in}}_w \vplus \mathbf{e}_{a_w} \vplus \mathbf{e}_{d_w}.
 \end{equation}
 
+\subsection{Induction}
+
+We just demonstrated a concrete construction of a two-level curve.
+Let's show that the same transforms from the two-level construction
+apply to descent from level $s$ to level $s-1$.
+
+Again we define a high and low, but the low is in $P_k(s)$.
+\begin{equation}
+x = 2^sh + \ell\quad h\in V_k, \ell\in P_k(s), 
+\end{equation}
+Treat $\l_w^{\text{in}}$ as a \emph{corner label} not the full $\ell\in P_k(s)$.
+
+Lift the transforms $T_{e,d}$ to $P_k(s)$ by writing a coordinate in $P_k(s)$
+as a sum of bit planes.
+\begin{equation}
+  \ell = \sum_{j=0}^{s-1}2^jb_j(\ell)\quad b_j(x)\in V_k
+\end{equation}
+Now define a lifted transform.
+\begin{equation}
+  \tilde{T}_{e,d}(x) \coloneq \sum_{j=0}^{s-1}2^j T_{e,d}(b_s(x))
+\end{equation}
+Because $\XOR$ with $e$ applied to every bit-plane complements the entire
+$s$-bit word when $e_i=1$, the same map can be written coordinatewise.
+\begin{equation}
+  \left(\tilde{T}_{e,d}(x\right)_i = \left(x_{\rho^d(i)}\right)\vplus \left(e_i(2^s-1)\right)
+\end{equation}
+That is, for our boundary conditions, the translation in $T_{e,d}$ determines
+whether the axis is flipped for $P_k(s)$.
+\begin{equation}
+  \left(\tilde{T}_{e,d}(x\right)_i = \begin{cases}
+  x_{\rho^d(i)}, & \mathbf{e}_i=0 \\
+  (2^j-1)-x_{\rho^d(i)}, & \mathbf{e}_i=1
+  \end{cases}
+\end{equation}
+As with $T_{e,d}$, $\tilde{T}_{e,d}$ is a bijection, so it preserves
+lattice adjacency within $P_k(s)$.
+
+The gluing condition, Eq.~\ref{eq:glue-low}, remains true in this context
+if we see it as a corner condition, so $\ell_w^{\text{in}}$ is a corner label.
+
+The Hilbert curve becomes
+\begin{equation}
+  H_{s+1}(2^{ks}w + c)\coloneq 2^s h_w + \tau_w^(s)(H_j(s))
+\end{equation}
+
+Prove bijection: The sets $2^sh_w+P_k(s)$ are disjoint and cover $P_k(j+1)$
+(standard dyadic partition). On each such set, $\tau_w^(s)\odot H_j$ is a bijection Since
+$H_j$ is and $\tau_w^{s}$ is a bijection. So the concatenation visits every
+point exactly once.
+
+Seam adjacency: This reduces to the $\mathbb{F}_2^k$ gluing constraint.
+The entry and exit points of consecutive subcubes are known by construction.
+\begin{equation}
+\begin{aligned}
+X_w^{\text{out}} & = H_{s+1}((w+1)2^{ks}-1) \\
+X_{w+1}^{\text{in}} & = H_{s+1}((w+1)2^{ks}) \\
+\end{aligned}
+\end{equation}
+
+We can trace adjacency as before. When leaving one child hypercube to traverse
+to another, one bit flips in the high bit, and one bit flips in the low bit.
+Here, the bit flips in the low bit \emph{corner}, so it changes by $\vplus$
+with $e_{d_w}$, in accordance with the seam constraint.
+
+Geometrically: Stepping to the neighboring subcube along axis $d_w$ changes the
+high contribution by $\pm 2^s \mathbf{e}_{d_w}$, and the low corner flips between
+the two opposite faces (coordinate $0 \leftrightarrow 2^s-1$), changing the low
+contribution by $\mp(2^s-1)\mathbf{e}_{d_w}$. Those two changes always sum to
+$\pm 1e_{d_w}$, that is a distance~1 move.
+
+\subsection{induction on gluing}
+
+Base case is that a binary Gray code is a lattice-continuous Hilbert curve
+on $P_k(1)$.
+
+Once you have a path for $s_w$ it defines a set of transforms $\tau_w$
+for the child hypercubes such that the entry and exit within the child's
+space $V'_n$ orient to the parent's space $V_n$.
+$$
+  \ell_w^{\text{in}}=\tau_w \mathbf{0}\quad \ell_w^{\text{in}}=\tau_w \mathbf{e}_0
+$$
+A suffient set of transforms $\tau_w$ is the set of orientations of directed
+edges above, $T_{e,d}$, where we can determine the unknown parameters $(e,d)$.
+$$
+\begin{aligned}
+  \rho^d \mathbf{0} + e & = \ell_w^{\text{in}}\\
+  \rho^d \mathbf{e}_0 + e & = \ell_w^{\text{out}}
+\end{aligned}
+$$
+The result is that $e=\ell_w^{\text{in}}$ and $d=a_w=\ell_w^{\text{in}}+\ell_w^{\text{out}}$. We now have a new map from $(V_2\times V'_2) \rightarrow P(2)$.
+$$
+x = 2h + T_{e_w,d_w}(\ell) \quad h\in V_k, \ell\in V'_k
+$$
+where $w=R_k(h)$. The transform $T_{e_w,d_w}$ maps the child space into the
+parent space.
+
+Above we used boundary conditions to determine a valid path through $P_k(2)$.
+They are that the first rank is the origin and the last rank is $(4,0,\ldots)$.
+That shows that a two-level construction keeps the boundary conditions of a
+correct one-level construction.
+
+If the transforms that apply to this construction are applied to sub-hypercubes
+of shape $P_k(n)$, where those sub-hypercubes have a curve defined that is
+lattice-continuous with boundary conditions at the origin and at $(2^n-1)\mathbf{e}_0$,
+then we can show that the construction above produces a lattice-continuous
+Hilbert curve of shape $P_k(n+1)$ with boundary conditions at the origin and
+at $(2^{n+1}-1)\mathbf{e}_0$.
+
+World coordinates are associated with the highest level of decomposition.
+
+\section{Directed Edges for any Gray Code}
+
+Were we to know the set of transforms for a particular Gray code,
+then we would have a Hilbert curve. Where do we get the transforms?
+The most popular method is to construct a graph for the $P_k(2)$ case
+and solve for all paths consistent with the Gray code's Hamiltonian path
+and Hilbert boundary conditions. These methods work well, but there are strong
+geometric constraints from subdivision of the space. These constraints suggest
+there might be more structure in the problem, such as the interaction between
+the high-bit coordinate and the low-bit coordinate.
+
+\subsection{Mismatch}
 \begin{lemma}[Mismatch-state form]\label{lem:mismatch}
 Define the \emph{mismatch state} \(s_w\in V_k\) by
 \begin{equation}\label{eq:mismatch}
@@ -276,36 +420,20 @@ walk\dots
 \subsection{existence}
 Does a path in always exist? Yes! It's not hard to find, actually.
 
+It's like a little board game. You roll the dice (follow the Gray code), and sometimes there is a
+move you must do, while other times you have some choice.
+
+Can we point out the calculation that shows why the \brgc path works?
+
 \subsection{dynamic program}
+Yup, it's running, and it's wicked fast. Just gotta write it here.
+
+Given that we have a concise description of which paths are allowed through
+$P_k(2)$, we can create an algorithm to generate them efficiently.
+
 
 \section{Construction}
-\subsection{induction on gluing}
 
-Once you have a path for $s_w$ it defines a set of transforms $\tau_w$
-for the child hypercubes such that the entry and exit within the child's
-space $V'_n$ orient to the parent's space $V_n$.
-$$
-  \ell_w^{\text{in}}=\tau_w \mathbf{0}\quad \ell_w^{\text{in}}=\tau_w \mathbf{e}_0
-$$
-A suffient set of transforms $\tau_w$ is the set of orientations of directed
-edges above, $T_{e,d}$, where we can determine the unknown parameters $(e,d)$.
-$$
-\begin{aligned}
-  \rho^d \mathbf{0} + e & = \ell_w^{\text{in}}\\
-  \rho^d \mathbf{e}_0 + e & = \ell_w^{\text{out}}
-\end{aligned}
-$$
-The result is that $e=\ell_w^{\text{in}}$ and $d=a_w=\ell_w^{\text{in}}+\ell_w^{\text{out}}$. We now have a new map from $(V_2\times V'_2) \rightarrow P(2)$.
-$$
-x = 2h + T_{e_w,d_w}(\ell) \quad h\in V_k, \ell\in V'_k
-$$
-where $w=R_k(h)$. The transform $T_{e_w,d_w}$ maps the child space into the
-parent space.
-
-Above we used boundary conditions to determine a valid path through $P_k(2)$.
-They are that the first rank is the origin and the last rank is $(4,0,\ldots)$.
-That shows that a two-level construction keeps the boundary conditions of a
-correct one-level construction.
 
 \subsection{Encode and decode for equal side lengths}
 
@@ -346,6 +474,10 @@ boundary conditions, we require that $\kappa_s^{-1}\mathbf{0}_{k+dk}=\mathbf{0}_
 and that $\kappa_s^{-1}\mathbf{e}_{0,k+dk}=\mathbf{e}_{0,k}$. This may require
 rotation of axes.
 
+Because of the embedding, the boundary conditions remain associated with
+the highest level of the decomposition, even if the origin of the coordinate
+system changes as levels descend.
+
 \subsection{Unequal encode and decode}
 
 You can imagine the case where the extents are $(2,3,2)$ so that at level
@@ -356,6 +488,8 @@ There is a convenient solution to the bookkeeping. At the start of the
 calculation, order axes so that $m_0<m_1<\cdots m_{n-1}$. This way the
 embedding won't shift the boundary conditions at $\mathbf{0}$ and $\mathbf{e}_0$
 because the axis at 0 stays active.
+
+If you want to use an arbitrary embedding, you can do it.
 
 This does, however, mean that the algorithm for unequal side lengths has a 
 different embedding operator. Whereas before for equal sides the operator
@@ -375,7 +509,15 @@ Maintain a stack of transforms $(e_s,d_s)$ and current rankings $w_s$.
 Walk $w_s$ for each child cube.
 
 This reduces the total computation to about $8+10k$ integer operations per
-index.
+index. And more memory.
+
+Finding the neighboring point in $P_k(\mathbf{m})$ is doable, and there is some
+advantage, but it's much less helpful. We can calculate or measure how much
+less helpful it is.
+
+Prefix scan algorithm. Could the linearity of the BRGC and its transforms
+mean that we can incrementally update the index given an incremental change
+to the point?
 
 \section{Experimental Validation}
 
