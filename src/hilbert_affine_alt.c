@@ -182,7 +182,7 @@ static inline uint32_t child_dir_hamilton(uint32_t w, uint32_t k)
  *   a(w) = the unique bit set in (s_w XOR s_{w+1}) for w < 2^k-1,
  *   and a(2^k-1) = hub (so ell_out(last) = h(last)).
  */
-static inline uint32_t child_mismatch_alt(uint32_t w, uint32_t k)
+static inline uint32_t child_mismatch_alt1(uint32_t w, uint32_t k)
 {
   if (k == 0u)
     return 0u;
@@ -208,15 +208,15 @@ static inline uint32_t child_mismatch_alt(uint32_t w, uint32_t k)
   return ((1u << hub) ^ (1u << j_prev) ^ (1u << j_next)) & mask;
 }
 
-static inline uint32_t child_entry_alt(uint32_t w, uint32_t k)
+static inline uint32_t child_entry_alt1(uint32_t w, uint32_t k)
 {
   const uint32_t mask = mask_bits(k);
   const uint32_t h = gray_code_axis0(w, k) & mask;
-  const uint32_t s = child_mismatch_alt(w, k) & mask;
+  const uint32_t s = child_mismatch_alt1(w, k) & mask;
   return (h ^ s) & mask;
 }
 
-static inline uint32_t child_dir_alt(uint32_t w, uint32_t k)
+static inline uint32_t child_dir_alt1(uint32_t w, uint32_t k)
 {
   if (k == 0u)
     return 0u;
@@ -228,34 +228,126 @@ static inline uint32_t child_dir_alt(uint32_t w, uint32_t k)
   if (w == maxw)
     return hub;
 
-  const uint32_t diff = child_mismatch_alt(w, k) ^ child_mismatch_alt(w + 1u, k);
+  const uint32_t diff = child_mismatch_alt1(w, k) ^ child_mismatch_alt1(w + 1u, k);
+  return trailing_zeros(diff);
+}
+
+
+/*
+ * Alternative 2: a second closed-form mismatch walk.
+ *
+ * This keeps the same even-index rule as Hamilton/Alt1:
+ *   s_w = e_hub XOR e_{r(w)}                         for even w>0
+ *   s_0 = 0, s_1 = e_hub, s_{2^k-1} = e_hub
+ *
+ * At each interior odd w there is a "free choice" that still satisfies the
+ * constraints.  Here we alternate that choice by w mod 4:
+ *   - if (w & 2) == 0  (i.e., w ≡ 1 mod 4):  s_w = e_hub        (Hamilton-like)
+ *   - if (w & 2) != 0  (i.e., w ≡ 3 mod 4):  s_w = e_hub XOR e_{r(w-1)} XOR e_{r(w+1)}
+ *
+ * where r(t) = (ctz(t)+1) mod k (t is even in all uses above).
+ */
+static inline uint32_t child_mismatch_alt2(uint32_t w, uint32_t k)
+{
+  if (k == 0u)
+    return 0u;
+
+  const uint32_t mask = mask_bits(k);
+  const uint32_t hub = (k == 1u) ? 0u : 1u;
+  const uint32_t maxw = mask; /* 2^k - 1, valid even for k==32 */
+
+  if (w == 0u)
+    return 0u;
+
+  if (w == 1u || w == maxw)
+    return (1u << hub) & mask;
+
+  if ((w & 1u) == 0u)
+  {
+    const uint32_t j = (trailing_zeros(w) + 1u) % k;
+    return ((1u << hub) ^ (1u << j)) & mask;
+  }
+
+  /* Odd interior: alternate the free choice by w mod 4. */
+  if ((w & 2u) == 0u)
+    return (1u << hub) & mask;
+
+  const uint32_t j_prev = (trailing_zeros(w - 1u) + 1u) % k;
+  const uint32_t j_next = (trailing_zeros(w + 1u) + 1u) % k;
+  return ((1u << hub) ^ (1u << j_prev) ^ (1u << j_next)) & mask;
+}
+
+static inline uint32_t child_entry_alt2(uint32_t w, uint32_t k)
+{
+  const uint32_t mask = mask_bits(k);
+  const uint32_t h = gray_code_axis0(w, k) & mask;
+  const uint32_t s = child_mismatch_alt2(w, k) & mask;
+  return (h ^ s) & mask;
+}
+
+static inline uint32_t child_dir_alt2(uint32_t w, uint32_t k)
+{
+  if (k == 0u)
+    return 0u;
+
+  const uint32_t hub = (k == 1u) ? 0u : 1u;
+  const uint32_t maxw = mask_bits(k);
+
+  /* Last child: choose the hub axis so that ell_out(last) = h(last). */
+  if (w == maxw)
+    return hub;
+
+  const uint32_t diff = child_mismatch_alt2(w, k) ^ child_mismatch_alt2(w + 1u, k);
   return trailing_zeros(diff);
 }
 
 /*
  * Select which (entry,dir) sequence to use.
- * - Default: alternative mismatch-based sequence above.
- * - Define HILBERT_AFFINE_USE_HAMILTON=1 to use Hamilton's original closed form.
+ *
+ * HILBERT_AFFINE_VARIANT:
+ *   0 = Hamilton (paper's original closed form)
+ *   1 = Alternative 1 (odd w always uses the 2-neighbor mismatch state)
+ *   2 = Alternative 2 (odd w alternates by w mod 4 between hub-only and 2-neighbor)
+ *
+ * Default is 2.
+ *
+ * Backwards compatibility:
+ *   If HILBERT_AFFINE_USE_HAMILTON is defined and nonzero, it forces VARIANT=0.
  */
-#ifndef HILBERT_AFFINE_USE_HAMILTON
-#define HILBERT_AFFINE_USE_HAMILTON 0
+#ifndef HILBERT_AFFINE_VARIANT
+#define HILBERT_AFFINE_VARIANT 2
+#endif
+
+#ifdef HILBERT_AFFINE_USE_HAMILTON
+#if HILBERT_AFFINE_USE_HAMILTON
+#undef HILBERT_AFFINE_VARIANT
+#define HILBERT_AFFINE_VARIANT 0
+#endif
 #endif
 
 static inline uint32_t child_entry(uint32_t w, uint32_t k)
 {
-#if HILBERT_AFFINE_USE_HAMILTON
+#if (HILBERT_AFFINE_VARIANT == 0)
   return child_entry_hamilton(w, k);
+#elif (HILBERT_AFFINE_VARIANT == 1)
+  return child_entry_alt1(w, k);
+#elif (HILBERT_AFFINE_VARIANT == 2)
+  return child_entry_alt2(w, k);
 #else
-  return child_entry_alt(w, k);
+#error "Unknown HILBERT_AFFINE_VARIANT (expected 0, 1, or 2)."
 #endif
 }
 
 static inline uint32_t child_dir(uint32_t w, uint32_t k)
 {
-#if HILBERT_AFFINE_USE_HAMILTON
+#if (HILBERT_AFFINE_VARIANT == 0)
   return child_dir_hamilton(w, k);
+#elif (HILBERT_AFFINE_VARIANT == 1)
+  return child_dir_alt1(w, k);
+#elif (HILBERT_AFFINE_VARIANT == 2)
+  return child_dir_alt2(w, k);
 #else
-  return child_dir_alt(w, k);
+#error "Unknown HILBERT_AFFINE_VARIANT (expected 0, 1, or 2)."
 #endif
 }
 

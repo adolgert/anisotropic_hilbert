@@ -80,7 +80,7 @@ hilbert_affine_alt.o: hilbert_affine_alt.c
 
 # Compile alt implementation with Hamilton's formulas
 hilbert_affine_alt_hamilton.o: hilbert_affine_alt.c
-	$(CC) $(CFLAGS) -DHILBERT_AFFINE_USE_HAMILTON=1 -c -o $@ $<
+	$(CC) $(CFLAGS) -DHILBERT_AFFINE_VARIANT=2 -c -o $@ $<
 
 # Test executable using alternative mismatch sequence
 test_hilbert_affine_alt: test_hilbert_affine_alt.cpp hilbert_affine_alt.o

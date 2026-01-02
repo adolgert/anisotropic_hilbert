@@ -381,13 +381,52 @@ geometric constraints from subdivision of the space. These constraints suggest
 there might be more structure in the problem, such as the interaction between
 the high-bit coordinate and the low-bit coordinate.
 
-\subsection{Mismatch}
-\begin{lemma}[Mismatch-state form]\label{lem:mismatch}
-Define the \emph{mismatch state} \(s_w\in V_k\) by
+\subsection{Mismatch}\label{sec:mismatch}
+
+By construction the Gray code fixes the \emph{parent} walk through the $2^k$ child cubes:
+it gives the sequence of high-bit vertices $h_w$ and, for each step, the unique axis
+$d_w$ with $h_{w+1}=h_w\vplus \mathbf{e}_{d_w}$.
+What remains is to choose, in each child cube, an \emph{orientation} of the lower-level curve:
+an entry corner $\ell_w^{\mathrm{in}}\in V_k$ and an exit direction $a_w$ so that consecutive
+children glue together across a single lattice edge.
+Equation~\eqref{eq:glue-low} expresses exactly that seam constraint.
+
+When we first tried to reason about \eqref{eq:glue-low} directly, the geometry was hard to
+see because the equation mixes two coordinate frames.
+The term $h_w$ is a global description (which subcube we are in),
+while $\ell_w^{\mathrm{in}}$ is a local description (which corner of that subcube we use).
+Across a seam, however, the lattice does not care about these two pieces separately:
+it only cares about their \emph{relative} alignment.
+This suggests introducing a state that measures how the local entry corner sits relative to the
+position of its parent cube.
+
+\begin{definition}[Mismatch state]
+For each child index $w$, define the \emph{mismatch} \(s_w\in V_k\) by
 \begin{equation}\label{eq:mismatch}
- s_w \coloneqq h_w \vplus \ell^{\mathrm{in}}_w.
+  s_w \coloneqq h_w \vplus \ell_w^{\mathrm{in}}.
 \end{equation}
-Then \eqref{eq:glue-low} is equivalent to the pair of constraints
+\end{definition}
+
+\paragraph{Geometric meaning.}
+In the two-level model $P_k(2)$, each coordinate is
+$x_i = 2(h_w)_i + (\ell_w^{\mathrm{in}})_i \in \{0,1,2,3\}$.
+A short check shows
+\[
+(s_w)_i = (h_w)_i \vplus (\ell_w^{\mathrm{in}})_i
+=
+\begin{cases}
+0, & x_i\in\{0,3\}\quad\text{(outer faces)},\\
+1, & x_i\in\{1,2\}\quad\text{(the two layers adjacent to the internal face)}.
+\end{cases}
+\]
+Thus $s_w$ is a $k$-bit \emph{face code}: the $i$-th bit is $1$ precisely when the entry corner of
+child cube $w$ lies on the interior face that is shared between the two halves in axis $i$.
+
+The payoff is that the seam constraint becomes a constraint \emph{only} on this face code.
+
+\begin{lemma}[Mismatch-state form]\label{lem:mismatch}
+Let $s_w$ be defined by \eqref{eq:mismatch}. Then the low-bit gluing constraint
+\eqref{eq:glue-low} is equivalent to the pair of constraints
 \begin{align}
  s_{w+1} &= s_w \vplus \mathbf{e}_{a_w}, \label{eq:s-walk}\\
  (s_{w+1})_{d_w} &= 1. \label{eq:s-face}
@@ -395,35 +434,160 @@ Then \eqref{eq:glue-low} is equivalent to the pair of constraints
 \end{lemma}
 
 \begin{proof}
-Using \eqref{eq:parent-step} and \eqref{eq:glue-low},
+For the walk constraint \eqref{eq:s-walk}, use the Gray-code step
+$h_{w+1}=h_w\vplus\mathbf{e}_{d_w}$ and the gluing rule \eqref{eq:glue-low}:
 \[
 \begin{aligned}
  s_{w+1}
  &= h_{w+1}\vplus \ell^{\mathrm{in}}_{w+1}
  = (h_w\vplus\mathbf{e}_{d_w}) \vplus (\ell^{\mathrm{in}}_w\vplus\mathbf{e}_{a_w}\vplus\mathbf{e}_{d_w})
  = (h_w\vplus\ell^{\mathrm{in}}_w)\vplus\mathbf{e}_{a_w}
- = s_w\vplus\mathbf{e}_{a_w},
+ = s_w\vplus\mathbf{e}_{a_w}.
 \end{aligned}
 \]
-which is \eqref{eq:s-walk}.
-For \eqref{eq:s-face}, note that \eqref{eq:seam} implies the seam vertex \((h_{w+1},\ell^{\mathrm{in}}_{w+1})\) lies on the shared face in axis \(d_w\), i.e. its low bit in axis \(d_w\) equals \(1-(h_{w+1})_{d_w}\).
-Equivalently,
-\((\ell^{\mathrm{in}}_{w+1})_{d_w} \vplus (h_{w+1})_{d_w} = 1\), which is \((s_{w+1})_{d_w}=1\).
+For the face constraint \eqref{eq:s-face}, recall from \eqref{eq:seam} that the seam vertex
+\((h_{w+1},\ell^{\mathrm{in}}_{w+1})\) lies on the shared face orthogonal to axis $d_w$.
+In the two-bit decomposition along that axis, being on the shared face means the low bit is the complement of the high bit:
+\((\ell^{\mathrm{in}}_{w+1})_{d_w} = 1-(h_{w+1})_{d_w}\).
+Over $\mathbb{F}_2$ this is \((\ell^{\mathrm{in}}_{w+1})_{d_w} \vplus (h_{w+1})_{d_w}=1\), i.e.
+\((s_{w+1})_{d_w}=1\).
 \end{proof}
 
-Lemma \ref{lem:mismatch} reduces the two-level gluing problem to a constrained walk on the hypercube \(Q_k\): at step \(w\), choose any neighbor \(s_{w+1}\) of \(s_w\) such that coordinate \(d_w\) of \(s_{w+1}\) is \(1\).
+Lemma~\ref{lem:mismatch} turns the seam problem into a constrained walk on the hypercube $Q_k$.
+At step $w$, the Gray code tells us which axis $d_w$ the \emph{parent} moves along.
+We must choose the next mismatch state $s_{w+1}$ adjacent to $s_w$ (one bit flip), but we are only allowed to land in the half-cube where bit $d_w$ equals $1$.
+Once a mismatch walk $(s_w)$ is fixed, the original geometric data are recovered by
+\[
+\ell_w^{\mathrm{in}} = h_w\vplus s_w,
+\qquad
+a_w = \text{the unique axis with } s_{w+1}=s_w\vplus \mathbf{e}_{a_w},
+\]
+and the corresponding orientations are $T_{\ell_w^{\mathrm{in}},a_w}$.
 
-Recall that in Hamilton and Rao-Chaplin, the child walk is on $Q_{k-1}$
-because of symmetry of the \brgc. We can show how to derive that
-walk\dots
+\subsection{Existence}\label{sec:existence}
 
-\subsection{existence}
-Does a path in always exist? Yes! It's not hard to find, actually.
+The mismatch formulation makes the existence question transparent:
+given a Gray code (hence a sequence of step axes $d_w$), does there always exist a mismatch walk satisfying \eqref{eq:s-walk}--\eqref{eq:s-face}?
+Yes; a valid walk can be constructed greedily.
 
-It's like a little board game. You roll the dice (follow the Gray code), and sometimes there is a
-move you must do, while other times you have some choice.
+\begin{proposition}[A mismatch walk always exists]\label{prop:existence}
+Let $(h_w)_{w=0}^{2^k-1}$ be any Gray code on $V_k$, and let $d_w$ be its step axis defined by
+$h_{w+1}=h_w\vplus\mathbf{e}_{d_w}$.
+There exists a sequence $(s_w)_{w=0}^{2^k-1}$ in $V_k$ with $s_0=\mathbf{0}$ satisfying
+\eqref{eq:s-walk}--\eqref{eq:s-face}, and hence there exists at least one choice of entry corners
+$\ell_w^{\mathrm{in}}$ and exit directions $a_w$ that satisfies the gluing constraint \eqref{eq:glue-low}.
+\end{proposition}
 
-Can we point out the calculation that shows why the \brgc path works?
+\begin{proof}
+Set $s_0=\mathbf{0}$.
+For each $w=0,\ldots,2^k-2$, let $d=d_w$.
+
+If $(s_w)_d=0$, we are \emph{forced} to flip bit $d$: set $a_w=d$ and $s_{w+1}=s_w\vplus\mathbf{e}_d$.
+Then $(s_{w+1})_d=1$.
+
+If $(s_w)_d=1$, we may flip any other bit and keep bit $d$ equal to $1$.
+For $k\ge 2$, choose a fixed rule such as $a_w=(d+1)\bmod k$ (so $a_w\neq d$) and set
+$s_{w+1}=s_w\vplus\mathbf{e}_{a_w}$.
+For $k=1$ this case never occurs because there is only one step.
+
+In either case $s_{w+1}$ is adjacent to $s_w$ and satisfies \eqref{eq:s-face}.
+Repeating for all $w$ constructs a valid mismatch walk.
+\end{proof}
+
+\paragraph{Example: \brgc and closed-form families.}
+The point of the mismatch state is not just existence, but \emph{structure}.
+For the binary-reflected Gray code,
+\[
+G(w) = w \vplus (w\SHR 1)\in V_k,
+\]
+the step axis is the ruler function
+\[
+G(w+1)=G(w)\vplus \mathbf{e}_{\operatorname{ctz}(w+1)},
+\qquad
+\operatorname{ctz}(t)=\text{the number of trailing zeros in the binary expansion of }t.
+\]
+In the rotated base frame used in this paper (so that the Gray code exits at $\mathbf{e}_0$ rather than $\mathbf{e}_{k-1}$), the step axis is shifted by one:
+\[
+d_w = \big(\operatorname{ctz}(w+1)+1\big)\bmod k.
+\]
+Lemma~\ref{lem:mismatch} then says that at time $t=w+1$ we must have
+\((s_t)_{(\operatorname{ctz}(t)+1)\bmod k}=1\),
+but we are otherwise free to choose any adjacent move.
+That ``one forced bit per step'' viewpoint makes it easy to see why there are many valid \brgc-based Hilbert rules.
+
+Define the ``hub'' bit $\mathrm{hub}=1$ (for $k\ge 2$) and, for even $t>0$, define
+\[
+r(t) \coloneqq \big(\operatorname{ctz}(t)+1\big)\bmod k.
+\]
+Even indices force bit $r(t)$ to be $1$; odd indices force the hub bit to be $1$.
+Keeping the hub bit fixed is a convenient way to satisfy all odd-step constraints, and it confines the mismatch walk to the $(k{-}1)$-dimensional slice $\{s : s_{\mathrm{hub}}=1\}$.
+
+\emph{Hamilton's choice} is the minimal way to satisfy the even-step constraints:
+\begin{equation}\label{eq:hamilton-mismatch}
+s_0=\mathbf{0},\qquad
+s_w=
+\begin{cases}
+\mathbf{e}_{\mathrm{hub}}, & w\ \text{odd},\\[2pt]
+\mathbf{e}_{\mathrm{hub}} \vplus \mathbf{e}_{r(w)}, & w\ \text{even},\ w>0.
+\end{cases}
+\end{equation}
+From $s_w$ we recover Hamilton's closed forms for the entry corner and child exit direction:
+\[
+\ell_w^{\mathrm{in}} = h_w\vplus s_w,
+\qquad
+a_w = \text{the unique bit index of }(s_w\vplus s_{w+1}).
+\]
+In particular, writing $w^- \coloneqq (w-1)\AND \NOT 1$ (``clear the least-significant bit''), one finds
+\[
+\ell_0^{\mathrm{in}}=\mathbf{0},
+\qquad
+\ell_w^{\mathrm{in}} = h_{w^-}\quad (w>0),
+\]
+which is Hamilton's \texttt{child\_entry}, and the exit-axis function admits the familiar trailing-ones form:
+\[
+a_w =
+\begin{cases}
+\mathrm{hub}, & w=0,\\
+\big(\tsb(w)+\mathrm{hub}\big)\bmod k, & w\ \text{odd},\\
+\big(\tsb(w-1)+\mathrm{hub}\big)\bmod k, & w\ \text{even},\ w>0,
+\end{cases}
+\]
+where $\tsb(x)$ is the number of trailing 1-bits of $x$.
+
+The mismatch constraints also make it easy to write down \emph{other} closed forms.
+For example, keep the even steps exactly as in \eqref{eq:hamilton-mismatch} but change what happens at odd indices:
+
+\smallskip
+\noindent\textbf{Alt~A (``look both ways'').}
+Set $s_0=\mathbf{0}$ and $s_1=s_{2^k-1}=\mathbf{e}_{\mathrm{hub}}$.
+For even $w>0$ set $s_w=\mathbf{e}_{\mathrm{hub}}\vplus \mathbf{e}_{r(w)}$ as before, but for interior odd $w$ set
+\[
+s_w = \mathbf{e}_{\mathrm{hub}}\vplus \mathbf{e}_{r(w-1)}\vplus \mathbf{e}_{r(w+1)}.
+\]
+
+\smallskip
+\noindent\textbf{Alt~B (alternate free choices).}
+Use the same even-step rule, and for odd $w\notin\{1,2^k-1\}$ set
+\[
+s_w =
+\begin{cases}
+\mathbf{e}_{\mathrm{hub}}, & w\equiv 1\pmod 4,\\
+\mathbf{e}_{\mathrm{hub}}\vplus \mathbf{e}_{r(w-1)}\vplus \mathbf{e}_{r(w+1)}, & w\equiv 3\pmod 4.
+\end{cases}
+\]
+
+Both alternatives satisfy \eqref{eq:s-walk}--\eqref{eq:s-face}, hence both yield valid (but different) closed-form rules
+for $(\ell_w^{\mathrm{in}},a_w)$ via $\ell_w^{\mathrm{in}}=h_w\vplus s_w$ and $a_w$ from $s_w\vplus s_{w+1}$.
+For $k=3$, the resulting mismatch sequences are visibly different:
+\[
+\begin{array}{rcl}
+\text{Hamilton:} && 000,\ 010,\ 110,\ 010,\ 011,\ 010,\ 110,\ 010,\\
+\text{Alt A:}    && 000,\ 010,\ 110,\ 111,\ 011,\ 111,\ 110,\ 010,\\
+\text{Alt B:}    && 000,\ 010,\ 110,\ 111,\ 011,\ 010,\ 110,\ 010.
+\end{array}
+\]
+These are three distinct families of directed-edge tables for the same high-bit \brgc skeleton.
+
 
 \subsection{dynamic program}
 Yup, it's running, and it's wicked fast. Just gotta write it here.
