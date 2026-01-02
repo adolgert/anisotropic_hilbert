@@ -499,6 +499,96 @@ into the larger space.
 
 There is otherwise no change to the algorithm.
 
+Algorithm for point-to-index (not a surprise).
+\begin{algorithm}
+\caption{Point to Index}
+\label{alg:point-to-index}
+\begin{algorithmic}[1]
+\Require Point $p$
+\Ensure Point $p\in P_n$.
+
+\State $(e, d) \gets (0,0)$
+
+\For{$s = m_{\max}$ \textbf{downto} $1$}
+    \If{$s < m_{\max}$}
+        \State $(e_0, d_0)\gets \mu(w, k)$ \Comment{Table lookup of Hilbert rule.}
+        \State $(e, d)\gets (S_{e,d}(e_0, d_0), d+d_0\mod k)$ \Comment{Compose transforms}
+    \EndIf
+    \State $i=\text{gather\_plane}(p, k, s)$ \Comment{Extract level from dims}
+    \State $w = G^{-1}(S_{e,d}^{-1}(i, k))$ \Comment{Transform to rank}
+    \State $h = S_{k,w}(h)$ \Comment{Include in index}
+\EndFor
+\Return $h$
+\end{algorithmic}
+\end{algorithm}
+
+Algorithm for index-to-point (not a surprise).
+\begin{algorithm}
+\caption{Index to Point}
+\label{alg:index-to-point}
+\begin{algorithmic}[1]
+\Require Index $h$
+\Ensure Index $h\in [0,\ldots,2^{mn}-1]$.
+
+\State $(e, d) \gets (0,0)$
+
+\For{$s = m_{\max}$ \textbf{downto} $1$}
+    \If{$s < m_{\max}$}
+        \State $(e_0, d_0)\gets \mu(w, k)$ \Comment{Table lookup of Hilbert rule.}
+        \State $(e, d)\gets (S_{e,d}(e_0, d_0), d+d_0\mod k)$ \Comment{Compose transforms}
+    \EndIf
+    \State $i=\text{gather\_plane}(p, k, s)$ \Comment{Extract level from dims}
+    \State $w = G^{-1}(S_{e,d}^{-1}(i, k))$ \Comment{Transform to rank}
+    \State $h = S_{k,w}(h)$ \Comment{Include in index}
+\EndFor
+\Return $h$
+\end{algorithmic}
+\end{algorithm}
+
+Algorithm for next-index, which can generate a sequence of points in $O(1)$ time by recalculating transforms only as needed. (Maybe this is nice.
+Has anybody done this before?)
+\begin{algorithm}
+\caption{Neighbor Index with Cached State}
+\label{alg:neighbor}
+\begin{algorithmic}[1]
+\Require Cached decode state for $h_0 \to p_0$: entry states $(e^{(s)}, d^{(s)})$, digits $w^{(s)}$, active axes $A_s$, point $p_0$
+\Require Neighbor axis $j$ and direction $\delta \in \{-1, +1\}$
+\Ensure Hilbert index $h_1 = H(p_0 + \delta \cdot \epsilon_j)$, or $\bot$ if out of bounds
+
+\State $p'_j \gets p_{0,j} + \delta$
+\If{$p'_j < 0$ or $p'_j \geq 2^{m_j}$}
+    \Return $\bot$ \Comment{Out of bounds}
+\EndIf
+
+\State $\textit{changed} \gets p_{0,j} \XOR p'_j$ \Comment{Which bits differ}
+\State $s^* \gets \max\{s : \text{bit } (s{-}1) \text{ of } \textit{changed} \text{ is set and } j \in A_s\}$
+
+\State $h_1 \gets 0$
+\For{$s = m_{\max}$ \textbf{downto} $s^* + 1$} \Comment{Copy unchanged high digits}
+    \State $h_1 \gets (h_1 \SHL k_s) \OR w^{(s)}$
+\EndFor
+
+\State $(e, d) \gets (e^{(s^*)}, d^{(s^*)})$ \Comment{Restore cached entry state}
+
+\For{$s = s^*$ \textbf{downto} $1$} \Comment{Recompute from $s^*$ down}
+    \State $\ell \gets 0$
+    \For{$t = 0$ \textbf{to} $k_s - 1$} \Comment{Pack level-$s$ bits of neighbor}
+        \State $a \gets A_s[t]$
+        \State $c \gets \begin{cases} p'_j & \text{if } a = j \\ p_{0,a} & \text{otherwise} \end{cases}$
+        \State $\ell \gets \ell \OR (\bitfn(c, s{-}1) \SHL t)$
+    \EndFor
+    \State $w \gets \gc^{-1}(T_{(e,d)}(\ell))$ \Comment{Encode: transform and Gray decode}
+    \State $h_1 \gets (h_1 \SHL k_s) \OR w$
+    \State $e \gets e \XOR \mathrm{rotL}(\entry(w), d{+}1, k_s)$ \Comment{Update state}
+    \State $d \gets (d + \dir(k_s, w) + 1) \mod k_s$
+    \If{$s > 1$ and $k_{s-1} > k_s$} \Comment{Embed if axes activate}
+        \State $(e, d) \gets \mathrm{Embed}(A_s, A_{s-1}, e, d)$
+    \EndIf
+\EndFor
+\Return $h_1$
+\end{algorithmic}
+\end{algorithm}
+
 \subsection{Next index}
 
 It is tremendously valuable to be able to map a whole domain $P_k(\mathbf{m})$

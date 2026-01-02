@@ -26,7 +26,7 @@ TARGET = libanisotropic_hilbert$(LIBEXT)
 SRC = anisotropic_hilbert.c
 OBJ = $(SRC:.c=.o)
 
-.PHONY: all clean test refine_pi_test test_affine test_affine_verbose test_affine_lean test_compare test_gray test_general test_general_verbose test_hdf5 generate_fast_tables test_fast_tables test_hamilton
+.PHONY: all clean test refine_pi_test test_affine test_affine_verbose test_affine_lean test_compare test_gray test_general test_general_verbose test_hdf5 generate_fast_tables test_fast_tables test_hamilton test_affine_alt test_affine_alt_verbose test_affine_alt_hamilton test_affine_alt_hamilton_verbose
 
 all: $(TARGET)
 
@@ -47,7 +47,7 @@ quicktest: $(TARGET)
 	python3 -c "from anisotropic_hilbert_c import encode, decode; print('C library loaded'); p = decode(0, (2,2)); print(f'decode(0, (2,2)) = {p}')"
 
 clean:
-	rm -f $(TARGET) $(OBJ) hilbert_affine.o hilbert_ffi.o test_hilbert_affine test_hilbert_affine_lean test_hilbert_general refine_pi_test generate_gray.o generate_gray_test tables_hdf5.o test_tables_hdf5 test_hilbert_tables.h5 generate_fast_tables test_fast_tables_verify test_fast.h5 test_random.h5 setup_hilbert.o hilbert_tables.h5 hamilton.o hilbert_general.o test_hamilton hamilton_metrics haverkort_metrics bounding_box_stats range_query_clustering
+	rm -f $(TARGET) $(OBJ) hilbert_affine.o hilbert_ffi.o test_hilbert_affine test_hilbert_affine_lean test_hilbert_general refine_pi_test generate_gray.o generate_gray_test tables_hdf5.o test_tables_hdf5 test_hilbert_tables.h5 generate_fast_tables test_fast_tables_verify test_fast.h5 test_random.h5 setup_hilbert.o hilbert_tables.h5 hamilton.o hilbert_general.o test_hamilton hamilton_metrics haverkort_metrics bounding_box_stats range_query_clustering hilbert_affine_alt.o hilbert_affine_alt_hamilton.o test_hilbert_affine_alt test_hilbert_affine_alt_hamilton
 
 # Build and run the refine_pi self-test harness.
 refine_pi_test: refine_pi.c
@@ -66,6 +66,42 @@ test_affine: test_hilbert_affine
 
 test_affine_verbose: test_hilbert_affine
 	./test_hilbert_affine -v
+
+# ---------------------------------------------------------------------------
+# Alternative mismatch-based Hilbert curve (hilbert_affine_alt.c)
+# ---------------------------------------------------------------------------
+# This file contains both Hamilton's original and the "look-both-ways"
+# alternative. Default is alternative; use -DHILBERT_AFFINE_USE_HAMILTON=1
+# to switch back to Hamilton.
+
+# Compile alt implementation (default = alternative mismatch sequence)
+hilbert_affine_alt.o: hilbert_affine_alt.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+# Compile alt implementation with Hamilton's formulas
+hilbert_affine_alt_hamilton.o: hilbert_affine_alt.c
+	$(CC) $(CFLAGS) -DHILBERT_AFFINE_USE_HAMILTON=1 -c -o $@ $<
+
+# Test executable using alternative mismatch sequence
+test_hilbert_affine_alt: test_hilbert_affine_alt.cpp hilbert_affine_alt.o
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+# Test executable using Hamilton via alt file (for comparison)
+test_hilbert_affine_alt_hamilton: test_hilbert_affine_alt.cpp hilbert_affine_alt_hamilton.o
+	$(CXX) $(CXXFLAGS) -o $@ test_hilbert_affine_alt.cpp hilbert_affine_alt_hamilton.o
+
+# Run tests
+test_affine_alt: test_hilbert_affine_alt
+	./test_hilbert_affine_alt
+
+test_affine_alt_verbose: test_hilbert_affine_alt
+	./test_hilbert_affine_alt -v
+
+test_affine_alt_hamilton: test_hilbert_affine_alt_hamilton
+	./test_hilbert_affine_alt_hamilton
+
+test_affine_alt_hamilton_verbose: test_hilbert_affine_alt_hamilton
+	./test_hilbert_affine_alt_hamilton -v
 
 # Build and run the hilbert_general test harness.
 # This tests the table-based implementation using HDF5 tables.
